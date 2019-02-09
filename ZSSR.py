@@ -92,7 +92,7 @@ class ZSSR:
         # Run gradually on all scale factors (if only one jump then this loop only happens once)
         for self.sf_ind, (sf, self.kernel) in enumerate(zip(self.conf.scale_factors, self.kernels)):
             # verbose
-            print '** Start training for sf=', sf, ' **'
+            print('** Start training for sf=', sf, ' **')
 
             # Relative_sf (used when base change is enabled. this is when input is the output of some previous scale)
             if np.isscalar(sf):
@@ -124,7 +124,7 @@ class ZSSR:
                            post_processed_output, vmin=0, vmax=1)
 
             # verbose
-            print '** Done training for sf=', sf, ' **'
+            print('** Done training for sf=', sf, ' **')
 
         # Return the final post processed output.
         # noinspection PyUnboundLocalVariable
@@ -211,6 +211,12 @@ class ZSSR:
         # The current imresize implementation supports specifying both.
         interpolated_lr_son = imresize(lr_son, self.sf, hr_father.shape, self.conf.upscale_method)
 
+        # add n_channels when needed
+        if len(interpolated_lr_son.shape) < 3:
+            interpolated_lr_son = np.expand_dims(interpolated_lr_son,-1)
+        if len(hr_father.shape) < 3:
+            hr_father = np.expand_dims(hr_father,-1)
+
         # Create feed dict
         feed_dict = {'learning_rate:0': self.learning_rate,
                      'lr_son:0': np.expand_dims(interpolated_lr_son, 0),
@@ -224,6 +230,10 @@ class ZSSR:
     def forward_pass(self, lr_son, hr_father_shape=None):
         # First gate for the lr-son into the network is interpolation to the size of the father
         interpolated_lr_son = imresize(lr_son, self.sf, hr_father_shape, self.conf.upscale_method)
+
+        # add n_channels when needed
+        if len(interpolated_lr_son.shape) < 3:
+            interpolated_lr_son = np.expand_dims(interpolated_lr_son,-1)
 
         # Create feed dict
         feed_dict = {'lr_son:0': np.expand_dims(interpolated_lr_son, 0)}
@@ -246,12 +256,12 @@ class ZSSR:
             std = np.sqrt(var)
 
             # Verbose
-            print 'slope: ', slope, 'STD: ', std
+            print('slope: ', slope, 'STD: ', std)
 
             # Determine learning rate maintaining or reduction by the ration between slope and noise
             if -self.conf.learning_rate_change_ratio * slope < std:
                 self.learning_rate /= 10
-                print "learning rate updated: ", self.learning_rate
+                print("learning rate updated: ", self.learning_rate)
 
                 # Keep track of learning rate changes for plotting purposes
                 self.learning_rate_change_iter_nums.append(self.iter)
@@ -283,7 +293,7 @@ class ZSSR:
 
         # Display test results if indicated
         if self.conf.display_test_results:
-            print 'iteration: ', self.iter, 'reconstruct mse:', self.mse_rec[-1], ', true mse:', (self.mse[-1]
+            print('iteration: ', self.iter, 'reconstruct mse:', self.mse_rec[-1], ', true mse:', (self.mse[-1])
                                                                                                   if self.mse else None)
 
         # plot losses if needed
@@ -314,7 +324,7 @@ class ZSSR:
 
             # Display info and save weights
             if not self.iter % self.conf.display_every:
-                print 'sf:', self.sf*self.base_sf, ', iteration: ', self.iter, ', loss: ', self.loss[self.iter]
+                print('sf:', self.sf*self.base_sf, ', iteration: ', self.iter, ', loss: ', self.loss[self.iter])
 
             # Test network
             if self.conf.run_test and (not self.iter % self.conf.run_test_every):
@@ -389,7 +399,7 @@ class ZSSR:
                 # Keeping track- this is the index inside the base scales list (provided in the config)
                 self.base_ind += 1
 
-            print 'base changed to %.2f' % self.base_sf
+            print('base changed to %.2f' % self.base_sf)
 
     def plot(self):
         plots_data, labels = zip(*[(np.array(x), l) for (x, l)
@@ -437,9 +447,9 @@ class ZSSR:
         self.loss_plot_space.legend(labels)
 
         # Show current input and output images
-        self.lr_son_image_space.imshow(self.lr_son, vmin=0.0, vmax=1.0)
-        self.out_image_space.imshow(self.train_output, vmin=0.0, vmax=1.0)
-        self.hr_father_image_space.imshow(self.hr_father, vmin=0.0, vmax=1.0)
+        self.lr_son_image_space.imshow(self.lr_son, vmin=0.0, vmax=1.0, cmap=self.conf.cmap)
+        self.out_image_space.imshow(self.train_output, vmin=0.0, vmax=1.0, cmap=self.conf.cmap)
+        self.hr_father_image_space.imshow(self.hr_father, vmin=0.0, vmax=1.0, cmap=self.conf.cmap)
 
         # These line are needed in order to see the graphics at real time
         self.fig.canvas.draw()
