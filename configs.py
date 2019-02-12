@@ -71,11 +71,13 @@ X2_ONE_JUMP_IDEAL_CONF.input_path = os.path.dirname(__file__) + '/set14'
 
 # [GUY] Disparity map config
 X2_ONE_JUMP_DISPARITY_CONF = Config(input_nchannels=1)
-X2_ONE_JUMP_DISPARITY_CONF.input_path = os.path.dirname(__file__) + '/Middlebury/Art'
+X2_ONE_JUMP_DISPARITY_CONF.input_path = os.path.dirname(__file__) + '/Middlebury/Books'
+X2_ONE_JUMP_DISPARITY_CONF.input_path_contains = 'disp1'
 X2_ONE_JUMP_DISPARITY_CONF.plot_losses = True
 X2_ONE_JUMP_DISPARITY_CONF.run_test_every = 20
 X2_ONE_JUMP_DISPARITY_CONF.cmap = 'gray'
-X2_ONE_JUMP_DISPARITY_CONF.input_path_contains = 'disp1'
+X2_ONE_JUMP_DISPARITY_CONF.max_iters = 100
+X2_ONE_JUMP_DISPARITY_CONF.max_iters = 20
 
 # Same as above but with visualization (Recommended for one image, interactive mode, for debugging)
 X2_IDEAL_WITH_PLOT_CONF = Config()

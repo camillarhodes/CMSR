@@ -30,6 +30,7 @@ class ZSSR:
     sf_ind = 0
     mse = []
     mse_rec = []
+    psnr_rec = []
     interp_rec_mse = []
     interp_mse = []
     mse_steps = []
@@ -186,7 +187,7 @@ class ZSSR:
 
         # Initialize all counters etc
         self.loss = [None] * self.conf.max_iters
-        self.mse, self.mse_rec, self.interp_mse, self.interp_rec_mse, self.mse_steps = [], [], [], [], []
+        self.mse, self.mse_rec, self.psnr_rec, self.interp_mse, self.interp_rec_mse, self.mse_steps = [], [], [], [], [], []
         self.iter = 0
         self.learning_rate = self.conf.learning_rate
         self.learning_rate_change_iter_nums = [0]
@@ -211,11 +212,8 @@ class ZSSR:
         # The current imresize implementation supports specifying both.
         interpolated_lr_son = imresize(lr_son, self.sf, hr_father.shape, self.conf.upscale_method)
 
-        # add n_channels when needed
-        if len(interpolated_lr_son.shape) < 3:
-            interpolated_lr_son = np.expand_dims(interpolated_lr_son,-1)
-        if len(hr_father.shape) < 3:
-            hr_father = np.expand_dims(hr_father,-1)
+        # [GUY] add n_channels when needed
+        interpolated_lr_son, hr_father =  add_n_channels_dim(interpolated_lr_son, hr_father)
 
         # Create feed dict
         feed_dict = {'learning_rate:0': self.learning_rate,
@@ -231,9 +229,8 @@ class ZSSR:
         # First gate for the lr-son into the network is interpolation to the size of the father
         interpolated_lr_son = imresize(lr_son, self.sf, hr_father_shape, self.conf.upscale_method)
 
-        # add n_channels when needed
-        if len(interpolated_lr_son.shape) < 3:
-            interpolated_lr_son = np.expand_dims(interpolated_lr_son,-1)
+        # [GUY] add n_channels when needed
+        interpolated_lr_son, = add_n_channels_dim(interpolated_lr_son)
 
         # Create feed dict
         feed_dict = {'lr_son:0': np.expand_dims(interpolated_lr_son, 0)}
@@ -277,7 +274,15 @@ class ZSSR:
 
         # 2. Reconstruction MSE, run for reconstruction- try to reconstruct the input from a downscaled version of it
         self.reconstruct_output = self.forward_pass(self.father_to_son(self.input), self.input.shape)
+
+        # [GUY] add n_channels when needed
+        self.input, self.reconstruct_output = add_n_channels_dim(self.input, self.reconstruct_output)
+
         self.mse_rec.append(np.mean(np.ndarray.flatten(np.square(self.input - self.reconstruct_output))))
+
+        # 2.5 [GUY] Reconstruction PSNR
+        with tf.Session():
+            self.psnr_rec.append(tf.image.psnr(self.input , self.reconstruct_output, max_val=1).eval())
 
         # 3. True MSE of simple interpolation for reference (only if ground-truth was given)
         interp_sr = imresize(self.input, self.sf, self.output_shape, self.conf.upscale_method)
@@ -293,7 +298,7 @@ class ZSSR:
 
         # Display test results if indicated
         if self.conf.display_test_results:
-            print('iteration: ', self.iter, 'reconstruct mse:', self.mse_rec[-1], ', true mse:', (self.mse[-1])
+            print('iteration: ', self.iter, 'reconstruct mse:', self.mse_rec[-1],'reconstruct psnr:', self.psnr_rec[-1], ', true mse:', (self.mse[-1])
                                                                                                   if self.mse else None)
 
         # plot losses if needed
@@ -305,7 +310,7 @@ class ZSSR:
         for self.iter in xrange(self.conf.max_iters):
             # Use augmentation from original input image to create current father.
             # If other scale factors were applied before, their result is also used (hr_fathers_in)
-            self.hr_father = random_augment(ims=self.hr_fathers_sources,
+            self.hr_father, self.hr_guider = random_augment(ims=self.hr_fathers_sources,
                                             base_scales=[1.0] + self.conf.scale_factors,
                                             leave_as_is_probability=self.conf.augment_leave_as_is_probability,
                                             no_interpolate_probability=self.conf.augment_no_interpolate_probability,

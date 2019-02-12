@@ -11,6 +11,7 @@ from scipy.io import loadmat
 
 
 def random_augment(ims,
+                   guiding_ims=None,
                    base_scales=None,
                    leave_as_is_probability=0.2,
                    no_interpolate_probability=0.3,
@@ -55,6 +56,9 @@ def random_augment(ims,
     scale_ind, base_scale = next((ind, np.min([base_scale])) for ind, base_scale in enumerate(base_scales)
                                  if np.min([base_scale]) > scale - 1.0e-6)
     im = ims[scale_ind]
+
+    # [GUY]
+    guiding_im = guiding_ims[scale_ind] if guiding_ims else None
 
     # Next are matrices whose multiplication will be the transformation. All are 3x3 matrices.
 
@@ -133,8 +137,13 @@ def random_augment(ims,
                      .dot(scale_mat)
                      .dot(shift_to_center_mat))
 
-    # Apply transformation to image and return the transformed image clipped between 0-1
-    return np.clip(warpPerspective(im, transform_mat, (crop_size, crop_size), flags=INTER_CUBIC), 0, 1)
+    # Apply transformation to images and return the transformed image clipped between 0-1
+    augmentation = lambda img: np.clip(warpPerspective(img, transform_mat, (crop_size, crop_size), flags=INTER_CUBIC), 0, 1)
+    augmented_im = augmentation(im)
+
+    # [GUY] also augment the guiding im if necessary
+    augmented_guiding_im = augmentation(guiding_im) if guiding_im else None
+    return augmented_im, augmented_guiding_im
 
 
 def back_projection(y_sr, y_lr, down_kernel, up_kernel, sf=None):
@@ -200,3 +209,14 @@ def prepare_result_dir(conf):
             copy(py_file, conf.result_path)
 
     return conf.result_path
+
+
+def add_n_channels_dim(*images):
+    # Adds a n_channels dim if needed
+    def _expander(img):
+        if len(img.shape) < 3:
+            img = np.expand_dims(img,-1)
+        return img
+
+    return tuple(map(_expander, images))
+
