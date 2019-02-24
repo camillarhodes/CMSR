@@ -44,20 +44,18 @@ class Config:
     result_path = os.path.dirname(__file__) + '/results'
     create_results_dir = True
     input_path = local_dir = os.path.dirname(__file__) + '/test_data'
-    input_path_contains = ''
     create_code_copy = True  # save a copy of the code in the results folder to easily match code changes to results
     display_test_results = True
     save_results = True
     image_cmap = None
 
-    def __init__(self, input_nchannels=3, width=64, depth=8):
+    def __init__(self, input_filter_depth=3, output_filter_depth=3, width=64, depth=8):
         self.width = width
         self.depth = depth
-        self.input_nchannels = input_nchannels
         # network meta params that by default are determined (by other params) by other params but can be changed
-        self.filter_shape = ([[3, 3, self.input_nchannels, self.width]] +
+        self.filter_shape = ([[3, 3, input_filter_depth, self.width]] +
                              [[3, 3, self.width, self.width]] * (self.depth-2) +
-                             [[3, 3, self.width, self.input_nchannels]])
+                             [[3, 3, self.width, output_filter_depth]])
 
 
 ########################################
@@ -70,14 +68,14 @@ X2_ONE_JUMP_IDEAL_CONF = Config()
 X2_ONE_JUMP_IDEAL_CONF.input_path = os.path.dirname(__file__) + '/set14'
 
 # [GUY] Disparity map config
-X2_ONE_JUMP_DISPARITY_CONF = Config(input_nchannels=1)
-X2_ONE_JUMP_DISPARITY_CONF.input_path = os.path.dirname(__file__) + '/Middlebury/Books'
-X2_ONE_JUMP_DISPARITY_CONF.input_path_contains = 'disp1'
+X2_ONE_JUMP_DISPARITY_CONF = Config(input_filter_depth=4,
+                                    output_filter_depth=1)
+X2_ONE_JUMP_DISPARITY_CONF.input_path = os.path.dirname(__file__) + '/Middlebury/Books/1'
 X2_ONE_JUMP_DISPARITY_CONF.plot_losses = True
 X2_ONE_JUMP_DISPARITY_CONF.run_test_every = 20
 X2_ONE_JUMP_DISPARITY_CONF.cmap = 'gray'
-X2_ONE_JUMP_DISPARITY_CONF.max_iters = 100
-X2_ONE_JUMP_DISPARITY_CONF.max_iters = 20
+X2_ONE_JUMP_DISPARITY_CONF.scale_factors = [[5.0, 5.0]]  # list of pairs (vertical, horizontal) for gradual increments in resolution
+X2_ONE_JUMP_DISPARITY_CONF.max_iters = 1000
 
 # Same as above but with visualization (Recommended for one image, interactive mode, for debugging)
 X2_IDEAL_WITH_PLOT_CONF = Config()

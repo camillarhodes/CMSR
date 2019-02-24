@@ -142,7 +142,7 @@ def random_augment(ims,
     augmented_im = augmentation(im)
 
     # [GUY] also augment the guiding im if necessary
-    augmented_guiding_im = augmentation(guiding_im) if guiding_im else None
+    augmented_guiding_im = augmentation(guiding_im) if guiding_im is not None else None
     return augmented_im, augmented_guiding_im
 
 

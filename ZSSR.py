@@ -1,6 +1,7 @@
 import tensorflow as tf
 import matplotlib.pyplot as plt
 import matplotlib.image as img
+import cv2
 from matplotlib.gridspec import GridSpec
 from configs import Config
 from utils import *
@@ -11,12 +12,14 @@ class ZSSR:
     kernel = None
     learning_rate = None
     hr_father = None
+    hr_guider = None
     lr_son = None
     sr = None
     sf = None
     gt_per_sf = None
     final_sr = None
     hr_fathers_sources = []
+    hr_guiders_sources = []
 
     # Output variables initialization / declaration
     reconstruct_output = None
@@ -42,6 +45,7 @@ class ZSSR:
     learning_rate_t = None
     lr_son_t = None
     hr_father_t = None
+    hr_guider_t = None
     filters_t = None
     layers_t = None
     net_output_t = None
@@ -59,7 +63,7 @@ class ZSSR:
     # Tensorflow graph default
     sess = None
 
-    def __init__(self, input_img, conf=Config(), ground_truth=None, kernels=None):
+    def __init__(self, input_img, conf=Config(), ground_truth=None, guiding_img=None, kernels=None):
         # Acquire meta parameters configuration from configuration class as a class variable
         self.conf = conf
 
@@ -68,6 +72,9 @@ class ZSSR:
 
         # For evaluation purposes, ground-truth image can be supplied.
         self.gt = ground_truth if type(ground_truth) is not str else img.imread(ground_truth)
+
+        # To improve learning, guiding image can be supplied
+        self.gi = guiding_img if type(guiding_img) is not str else img.imread(guiding_img)
 
         # Preprocess the kernels. (see function to see what in includes).
         self.kernels = preprocess_kernels(kernels, conf)
@@ -104,6 +111,10 @@ class ZSSR:
             # Initialize network
             self.init_sess(init_weights=self.conf.init_net_for_each_sf)
 
+            # Add a downscaled version of guider image for random_augment
+            if self.gi is not None:
+                self.hr_guiders_sources.append(self.father_to_son(self.gi))
+
             # Train the network
             self.train()
 
@@ -112,6 +123,8 @@ class ZSSR:
 
             # Keep the results for the next scale factors SR to use as dataset
             self.hr_fathers_sources.append(post_processed_output)
+            # TODO: add guider of the right scale
+            # self.hr_guiders_sources.append(scaled_guider_img)
 
             # In some cases, the current output becomes the new input. If indicated and if this is the right scale to
             # become the new base input. all of these conditions are checked inside the function.
@@ -120,9 +133,12 @@ class ZSSR:
             # Save the final output if indicated
             if self.conf.save_results:
                 sf_str = ''.join('X%.2f' % s for s in self.conf.scale_factors[self.sf_ind])
-                plt.imsave('%s/%s_zssr_%s.png' %
+                # plt.imsave('%s/%s_zssr_%s.png' %
+                #            (self.conf.result_path, os.path.basename(self.file_name)[:-4], sf_str),
+                #            post_processed_output[:,:,0], vmin=0, vmax=1)
+                cv2.imwrite('%s/%s_zssr_%s.png' %
                            (self.conf.result_path, os.path.basename(self.file_name)[:-4], sf_str),
-                           post_processed_output, vmin=0, vmax=1)
+                           post_processed_output[:,:,0] * 255)
 
             # verbose
             print('** Done training for sf=', sf, ' **')
@@ -139,9 +155,13 @@ class ZSSR:
 
             # Input image
             self.lr_son_t = tf.placeholder(tf.float32, name='lr_son')
+            # self.lr_son_t = tf.image.grayscale_to_rgb(self.lr_son_t)
 
             # Ground truth (supervision)
             self.hr_father_t = tf.placeholder(tf.float32, name='hr_father')
+
+            # Guider image
+            self.hr_guider_t = tf.placeholder(tf.float32, name='hr_guider')
 
             # Filters
             self.filters_t = [tf.get_variable(shape=meta.filter_shape[ind], name='filter_%d' % ind,
@@ -150,8 +170,21 @@ class ZSSR:
                                                       meta.filter_shape[ind][0:3]))))
                               for ind in range(meta.depth)]
 
-            # Activate filters on layers one by one (this is just building the graph, no calculation is done here)
-            self.layers_t = [self.lr_son_t] + [None] * meta.depth
+            # Build the network
+
+            # define input and guider layers
+
+            # Define merging layer for the guider image if needed
+            concat_layer = tf.concat(
+                [self.lr_son_t, self.hr_guider_t], 3, name ='concat_layer'
+            ) if self.gi is not None else None
+            # concat_layer = None
+
+            # Define first layer
+            first_layer = concat_layer if concat_layer is not None else self.lr_son_t
+
+            self.layers_t = [first_layer] + [None] * meta.depth
+
             for l in range(meta.depth - 1):
                 self.layers_t[l + 1] = tf.nn.relu(tf.nn.conv2d(self.layers_t[l], self.filters_t[l],
                                                                [1, 1, 1, 1], "SAME", name='layer_%d' % (l + 1)))
@@ -205,7 +238,7 @@ class ZSSR:
                               np.any(np.abs(self.sf - self.conf.scale_factors[-1]) > 0.01))
                           else self.gt)
 
-    def forward_backward_pass(self, lr_son, hr_father):
+    def forward_backward_pass(self, lr_son, hr_father, hr_guider):
         # First gate for the lr-son into the network is interpolation to the size of the father
         # Note: we specify both output_size and scale_factor. best explained by example: say father size is 9 and sf=2,
         # small_son size is 4. if we upscale by sf=2 we get wrong size, if we upscale to size 9 we get wrong sf.
@@ -218,14 +251,15 @@ class ZSSR:
         # Create feed dict
         feed_dict = {'learning_rate:0': self.learning_rate,
                      'lr_son:0': np.expand_dims(interpolated_lr_son, 0),
-                     'hr_father:0': np.expand_dims(hr_father, 0)}
+                     'hr_father:0': np.expand_dims(hr_father, 0),
+                     'hr_guider:0': np.expand_dims(hr_guider, 0)}
 
         # Run network
         _, self.loss[self.iter], train_output = self.sess.run([self.train_op, self.loss_t, self.net_output_t],
                                                               feed_dict)
         return np.clip(np.squeeze(train_output), 0, 1)
 
-    def forward_pass(self, lr_son, hr_father_shape=None):
+    def forward_pass(self, lr_son, hr_guider, hr_father_shape=None):
         # First gate for the lr-son into the network is interpolation to the size of the father
         interpolated_lr_son = imresize(lr_son, self.sf, hr_father_shape, self.conf.upscale_method)
 
@@ -233,7 +267,8 @@ class ZSSR:
         interpolated_lr_son, = add_n_channels_dim(interpolated_lr_son)
 
         # Create feed dict
-        feed_dict = {'lr_son:0': np.expand_dims(interpolated_lr_son, 0)}
+        feed_dict = {'lr_son:0': np.expand_dims(interpolated_lr_son, 0),
+                     'hr_guider:0': np.expand_dims(hr_guider, 0)}
 
         # Run network
         return np.clip(np.squeeze(self.sess.run([self.net_output_t], feed_dict)), 0, 1)
@@ -268,12 +303,12 @@ class ZSSR:
 
         # 1. True MSE (only if ground-truth was given), note: this error is before post-processing.
         # Run net on the input to get the output super-resolution (almost final result, only post-processing needed)
-        self.sr = self.forward_pass(self.input)
+        self.sr = self.forward_pass(self.input, self.gi, self.gi.shape)
         self.mse = (self.mse + [np.mean(np.ndarray.flatten(np.square(self.gt_per_sf - self.sr)))]
                     if self.gt_per_sf is not None else None)
 
         # 2. Reconstruction MSE, run for reconstruction- try to reconstruct the input from a downscaled version of it
-        self.reconstruct_output = self.forward_pass(self.father_to_son(self.input), self.input.shape)
+        self.reconstruct_output = self.forward_pass(self.father_to_son(self.input), self.father_to_son(self.gi), self.input.shape)
 
         # [GUY] add n_channels when needed
         self.input, self.reconstruct_output = add_n_channels_dim(self.input, self.reconstruct_output)
@@ -282,7 +317,7 @@ class ZSSR:
 
         # 2.5 [GUY] Reconstruction PSNR
         with tf.Session():
-            self.psnr_rec.append(tf.image.psnr(self.input , self.reconstruct_output, max_val=1).eval())
+            self.psnr_rec.append(tf.image.psnr(self.input, self.reconstruct_output, max_val=1).eval())
 
         # 3. True MSE of simple interpolation for reference (only if ground-truth was given)
         interp_sr = imresize(self.input, self.sf, self.output_shape, self.conf.upscale_method)
@@ -310,22 +345,24 @@ class ZSSR:
         for self.iter in xrange(self.conf.max_iters):
             # Use augmentation from original input image to create current father.
             # If other scale factors were applied before, their result is also used (hr_fathers_in)
-            self.hr_father, self.hr_guider = random_augment(ims=self.hr_fathers_sources,
-                                            base_scales=[1.0] + self.conf.scale_factors,
-                                            leave_as_is_probability=self.conf.augment_leave_as_is_probability,
-                                            no_interpolate_probability=self.conf.augment_no_interpolate_probability,
-                                            min_scale=self.conf.augment_min_scale,
-                                            max_scale=([1.0] + self.conf.scale_factors)[len(self.hr_fathers_sources)-1],
-                                            allow_rotation=self.conf.augment_allow_rotation,
-                                            scale_diff_sigma=self.conf.augment_scale_diff_sigma,
-                                            shear_sigma=self.conf.augment_shear_sigma,
-                                            crop_size=self.conf.crop_size)
+            self.hr_father, self.hr_guider = random_augment(
+                ims=self.hr_fathers_sources,
+                guiding_ims=self.hr_guiders_sources,
+                base_scales=[1.0] + self.conf.scale_factors,
+                leave_as_is_probability=self.conf.augment_leave_as_is_probability,
+                no_interpolate_probability=self.conf.augment_no_interpolate_probability,
+                min_scale=self.conf.augment_min_scale,
+                max_scale=([1.0] + self.conf.scale_factors)[len(self.hr_fathers_sources)-1],
+                allow_rotation=self.conf.augment_allow_rotation,
+                scale_diff_sigma=self.conf.augment_scale_diff_sigma,
+                shear_sigma=self.conf.augment_shear_sigma,
+                crop_size=self.conf.crop_size)
 
             # Get lr-son from hr-father
             self.lr_son = self.father_to_son(self.hr_father)
 
             # run network forward and back propagation, one iteration (This is the heart of the training)
-            self.train_output = self.forward_backward_pass(self.lr_son, self.hr_father)
+            self.train_output = self.forward_backward_pass(self.lr_son, self.hr_father, self.hr_guider)
 
             # Display info and save weights
             if not self.iter % self.conf.display_every:
@@ -356,16 +393,18 @@ class ZSSR:
         for k in range(0, 1 + 7 * self.conf.output_flip, 1 + int(self.sf[0] != self.sf[1])):
             # Rotate 90*k degrees and mirror flip when k>=4
             test_input = np.rot90(self.input, k) if k < 4 else np.fliplr(np.rot90(self.input, k))
+            test_gi = np.rot90(self.gi, k) if k < 4 else np.fliplr(np.rot90(self.gi, k))
 
             # Apply network on the rotated input
-            tmp_output = self.forward_pass(test_input)
+            tmp_output = self.forward_pass(test_input, test_gi, test_gi.shape)
 
             # Undo the rotation for the processed output (mind the opposite order of the flip and the rotation)
             tmp_output = np.rot90(tmp_output, -k) if k < 4 else np.rot90(np.fliplr(tmp_output), -k)
 
             # fix SR output with back projection technique for each augmentation
+
             for bp_iter in range(self.conf.back_projection_iters[self.sf_ind]):
-                tmp_output = back_projection(tmp_output, self.input, down_kernel=self.kernel,
+                tmp_output = back_projection(add_n_channels_dim(tmp_output)[0], self.input, down_kernel=self.kernel,
                                              up_kernel=self.conf.upscale_method, sf=self.sf)
 
             # save outputs from all augmentations
@@ -376,7 +415,7 @@ class ZSSR:
 
         # Again back projection for the final fused result
         for bp_iter in range(self.conf.back_projection_iters[self.sf_ind]):
-            almost_final_sr = back_projection(almost_final_sr, self.input, down_kernel=self.kernel,
+            almost_final_sr = back_projection(add_n_channels_dim(almost_final_sr)[0], self.input, down_kernel=self.kernel,
                                               up_kernel=self.conf.upscale_method, sf=self.sf)
 
         # Now we can keep the final result (in grayscale case, colors still need to be added, but we don't care
