@@ -19,19 +19,20 @@ def main(conf_name, gpu):
     local_dir = os.path.dirname(__file__)
 
     # We take all png files that are not ground truth
-    files = [file_path for file_path in glob.glob('%s/*.png' % conf.input_path)
-             if not file_path[-7:-4] == '_gt' and not file_path[-7:-4] == '_gi']
+    files = [file_path for file_path in glob.glob('%s/*.*' % conf.input_path)
+             if file_path[-len(conf.img_ext) - 4 :-len(conf.img_ext) - 1] \
+             not in ['_gt','_gi'] and file_path.split('.')[-1] == conf.img_ext]
 
     # Loop over all the files
     for file_ind, input_file in enumerate(files):
 
         # Ground-truth file needs to be like the input file with _gt (if exists)
-        ground_truth_file = input_file[:-4] + '_gt.png'
+        ground_truth_file = input_file[:-len(conf.img_ext) - 1] + '_gt.png'
         if not os.path.isfile(ground_truth_file):
             ground_truth_file = '0'
 
         # Guiding files needs to be like the input file with _gi (if exists)
-        guiding_file = input_file[:-4] + '_gi.png'
+        guiding_file = input_file[:-len(conf.img_ext) - 1] + '_gi.' + conf.guiding_img_ext
         if not os.path.isfile(guiding_file):
             guiding_file = '0'
 

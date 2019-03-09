@@ -76,6 +76,9 @@ class ZSSR:
         # To improve learning, guiding image can be supplied
         self.gi = guiding_img if type(guiding_img) is not str else img.imread(guiding_img)
 
+        # Normalize images
+        self.input, self.gt, self.gi = normalize_images(self.input, self.gt, self.gi)
+
         # Preprocess the kernels. (see function to see what in includes).
         self.kernels = preprocess_kernels(kernels, conf)
 
@@ -91,6 +94,9 @@ class ZSSR:
         # The first hr father source is the input (source goes through augmentation to become a father)
         # Later on, if we use gradual sr increments, results for intermediate scales will be added as sources.
         self.hr_fathers_sources = [self.input]
+
+        if self.gi is not None:
+            self.hr_guiders_sources = [self.scale_guiding_im()]
 
         # We keep the input file name to save the output with a similar name. If array was given rather than path
         # then we use default provided by the configs
@@ -113,7 +119,7 @@ class ZSSR:
 
             # Add a downscaled version of guider image for random_augment
             if self.gi is not None:
-                self.hr_guiders_sources.append(self.father_to_son(self.gi))
+                self.scaled_gi = self.scale_guiding_im()
 
             # Train the network
             self.train()
@@ -123,8 +129,10 @@ class ZSSR:
 
             # Keep the results for the next scale factors SR to use as dataset
             self.hr_fathers_sources.append(post_processed_output)
-            # TODO: add guider of the right scale
-            # self.hr_guiders_sources.append(scaled_guider_img)
+
+            # add guider of the right scale
+            if self.gi is not None:
+                self.hr_guiders_sources.append(self.scaled_gi)
 
             # In some cases, the current output becomes the new input. If indicated and if this is the right scale to
             # become the new base input. all of these conditions are checked inside the function.
@@ -178,7 +186,6 @@ class ZSSR:
             concat_layer = tf.concat(
                 [self.lr_son_t, self.hr_guider_t], 3, name ='concat_layer'
             ) if self.gi is not None else None
-            # concat_layer = None
 
             # Define first layer
             first_layer = concat_layer if concat_layer is not None else self.lr_son_t
@@ -230,12 +237,13 @@ class ZSSR:
         # We use imresize with both scale and output-size, see comment in forward_backward_pass.
         # noinspection PyTypeChecker
         self.gt_per_sf = (imresize(self.gt,
-                                   scale_factor=self.sf / self.conf.scale_factors[-1],
+                                   scale_factor=self.sf / self.conf.scale_factors[-1] if self.output_shape is None else None,
                                    output_shape=self.output_shape,
                                    kernel=self.conf.downscale_gt_method)
                           if (self.gt is not None and
-                              self.sf is not None and
-                              np.any(np.abs(self.sf - self.conf.scale_factors[-1]) > 0.01))
+                              self.sf is not None)
+                              # self.sf is not None and
+                              # np.any(np.abs(self.sf - self.conf.scale_factors[-1]) > 0.01))
                           else self.gt)
 
     def forward_backward_pass(self, lr_son, hr_father, hr_guider):
@@ -247,12 +255,15 @@ class ZSSR:
 
         # [GUY] add n_channels when needed
         interpolated_lr_son, hr_father =  add_n_channels_dim(interpolated_lr_son, hr_father)
+        if hr_guider is not None:
+            hr_guider, = add_n_channels_dim(hr_guider)
+        # hr_guider, = add_n_channels_dim(self.auto_canny(hr_guider))
 
         # Create feed dict
         feed_dict = {'learning_rate:0': self.learning_rate,
                      'lr_son:0': np.expand_dims(interpolated_lr_son, 0),
                      'hr_father:0': np.expand_dims(hr_father, 0),
-                     'hr_guider:0': np.expand_dims(hr_guider, 0)}
+                     'hr_guider:0': np.expand_dims(hr_guider, 0) if hr_guider is not None else None}
 
         # Run network
         _, self.loss[self.iter], train_output = self.sess.run([self.train_op, self.loss_t, self.net_output_t],
@@ -265,10 +276,13 @@ class ZSSR:
 
         # [GUY] add n_channels when needed
         interpolated_lr_son, = add_n_channels_dim(interpolated_lr_son)
+        if hr_guider is not None:
+            hr_guider, = add_n_channels_dim(hr_guider)
+        # hr_guider, = add_n_channels_dim(self.auto_canny(hr_guider))
 
         # Create feed dict
         feed_dict = {'lr_son:0': np.expand_dims(interpolated_lr_son, 0),
-                     'hr_guider:0': np.expand_dims(hr_guider, 0)}
+                     'hr_guider:0': np.expand_dims(hr_guider, 0) if hr_guider is not None else None}
 
         # Run network
         return np.clip(np.squeeze(self.sess.run([self.net_output_t], feed_dict)), 0, 1)
@@ -303,12 +317,12 @@ class ZSSR:
 
         # 1. True MSE (only if ground-truth was given), note: this error is before post-processing.
         # Run net on the input to get the output super-resolution (almost final result, only post-processing needed)
-        self.sr = self.forward_pass(self.input, self.gi, self.gi.shape)
+        self.sr = self.forward_pass(self.input, self.scaled_gi)
         self.mse = (self.mse + [np.mean(np.ndarray.flatten(np.square(self.gt_per_sf - self.sr)))]
                     if self.gt_per_sf is not None else None)
 
         # 2. Reconstruction MSE, run for reconstruction- try to reconstruct the input from a downscaled version of it
-        self.reconstruct_output = self.forward_pass(self.father_to_son(self.input), self.father_to_son(self.gi), self.input.shape)
+        self.reconstruct_output = self.forward_pass(self.father_to_son(self.input), self.father_to_son(self.scaled_gi), self.input.shape)
 
         # [GUY] add n_channels when needed
         self.input, self.reconstruct_output = add_n_channels_dim(self.input, self.reconstruct_output)
@@ -321,7 +335,7 @@ class ZSSR:
 
         # 3. True MSE of simple interpolation for reference (only if ground-truth was given)
         interp_sr = imresize(self.input, self.sf, self.output_shape, self.conf.upscale_method)
-        self.interp_mse = (self.interp_mse + [np.mean(np.ndarray.flatten(np.square(self.gt_per_sf - interp_sr)))]
+        self.interp_mse = (self.interp_mse + [np.mean(np.ndarray.flatten(np.square(self.gt_per_sf - interp_sr[:,:,0])))]
                            if self.gt_per_sf is not None else None)
 
         # 4. Reconstruction MSE of simple interpolation over downscaled input
@@ -380,9 +394,16 @@ class ZSSR:
                 break
 
     def father_to_son(self, hr_father):
+        if hr_father is None:
+            return None
+
         # Create son out of the father by downscaling and if indicated adding noise
         lr_son = imresize(hr_father, 1.0 / self.sf, kernel=self.kernel)
         return np.clip(lr_son + np.random.randn(*lr_son.shape) * self.conf.noise_std, 0, 1)
+
+    def scale_guiding_im(self):
+        sf = self.sf if self.sf is not None else np.array([self.base_sf, self.base_sf])
+        return np.clip(imresize(self.gi, sf / self.conf.scale_factors[-1] if self.output_shape is None else None, self.output_shape, kernel=self.kernel), 0, 1)
 
     def final_test(self):
         # Run over 8 augmentations of input - 4 rotations and mirror (geometric self ensemble)
@@ -393,10 +414,13 @@ class ZSSR:
         for k in range(0, 1 + 7 * self.conf.output_flip, 1 + int(self.sf[0] != self.sf[1])):
             # Rotate 90*k degrees and mirror flip when k>=4
             test_input = np.rot90(self.input, k) if k < 4 else np.fliplr(np.rot90(self.input, k))
-            test_gi = np.rot90(self.gi, k) if k < 4 else np.fliplr(np.rot90(self.gi, k))
+
+            test_gi = None
+            if self.gi is not None:
+                test_gi = np.rot90(self.scaled_gi, k) if k < 4 else np.fliplr(np.rot90(self.scaled_gi, k))
 
             # Apply network on the rotated input
-            tmp_output = self.forward_pass(test_input, test_gi, test_gi.shape)
+            tmp_output = self.forward_pass(test_input, test_gi, test_gi.shape if test_gi is not None else None)
 
             # Undo the rotation for the processed output (mind the opposite order of the flip and the rotation)
             tmp_output = np.rot90(tmp_output, -k) if k < 4 else np.rot90(np.fliplr(tmp_output), -k)
@@ -452,7 +476,7 @@ class ZSSR:
                                            'Bicubic to reconstruct MSE']) if x is not None])
 
         # For the first iteration create the figure
-        if not self.iter:
+        if not self.iter and not self.sf_ind:
             # Create figure and split it using GridSpec. Name each region as needed
             self.fig = plt.figure(figsize=(9.5, 9))
             grid = GridSpec(4, 4)

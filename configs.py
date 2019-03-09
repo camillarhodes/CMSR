@@ -47,7 +47,9 @@ class Config:
     create_code_copy = True  # save a copy of the code in the results folder to easily match code changes to results
     display_test_results = True
     save_results = True
-    image_cmap = None
+    cmap = None
+    img_ext = 'png'
+    guiding_img_ext = 'png'
 
     def __init__(self, input_filter_depth=3, output_filter_depth=3, width=64, depth=8):
         self.width = width
@@ -68,14 +70,24 @@ X2_ONE_JUMP_IDEAL_CONF = Config()
 X2_ONE_JUMP_IDEAL_CONF.input_path = os.path.dirname(__file__) + '/set14'
 
 # [GUY] Disparity map config
-X2_ONE_JUMP_DISPARITY_CONF = Config(input_filter_depth=4,
+X2_ONE_JUMP_DISPARITY_CONF = Config(input_filter_depth=2,
                                     output_filter_depth=1)
-X2_ONE_JUMP_DISPARITY_CONF.input_path = os.path.dirname(__file__) + '/Middlebury/Books/1'
 X2_ONE_JUMP_DISPARITY_CONF.plot_losses = True
 X2_ONE_JUMP_DISPARITY_CONF.run_test_every = 20
+# thermal
+# X2_ONE_JUMP_DISPARITY_CONF.input_path = os.path.dirname(__file__) + '/agri-net-dataset-resized/'
+# X2_ONE_JUMP_DISPARITY_CONF.img_ext = 'tiff'
+# X2_ONE_JUMP_DISPARITY_CONF.guiding_img_ext = 'bmp'
+# depth
+X2_ONE_JUMP_DISPARITY_CONF.input_path = os.path.dirname(__file__) + '/Middlebury/Books/1'
+X2_ONE_JUMP_DISPARITY_CONF.img_ext = 'png'
 X2_ONE_JUMP_DISPARITY_CONF.cmap = 'gray'
 X2_ONE_JUMP_DISPARITY_CONF.scale_factors = [[5.0, 5.0]]  # list of pairs (vertical, horizontal) for gradual increments in resolution
-X2_ONE_JUMP_DISPARITY_CONF.max_iters = 1000
+# X2_ONE_JUMP_DISPARITY_CONF.scale_factors = [[2.0, 2.0], [4.0, 4.5]]  # list of pairs (vertical, horizontal) for gradual increments in resolution
+# X2_ONE_JUMP_DISPARITY_CONF.scale_factors = [[4.0, 4.5]]  # list of pairs (vertical, horizontal) for gradual increments in resolution
+# X2_ONE_JUMP_DISPARITY_CONF.scale_factors = [[1.0, 2.0], [2.0, 1.0], [2.0, 2.0], [2.0, 3.0], [3.0, 2.0], [3.0, 3.0], [3.0, 4.0], [4.0, 3.0], [4.0, 4.0], [4.0, 4.5]]
+# X2_ONE_JUMP_DISPARITY_CONF.back_projection_iters = [6, 6, 6, 8, 8, 8, 10, 10, 12, 12]
+# X2_ONE_JUMP_DISPARITY_CONF.max_iters = 600
 
 # Same as above but with visualization (Recommended for one image, interactive mode, for debugging)
 X2_IDEAL_WITH_PLOT_CONF = Config()

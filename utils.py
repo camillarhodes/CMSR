@@ -1,6 +1,6 @@
 import numpy as np
 from math import pi, sin, cos
-from cv2 import warpPerspective, INTER_CUBIC
+from cv2 import warpPerspective, INTER_CUBIC, Canny
 from imresize import imresize
 from shutil import copy
 from time import strftime, localtime
@@ -219,4 +219,25 @@ def add_n_channels_dim(*images):
         return img
 
     return tuple(map(_expander, images))
+
+
+def normalize_images(*images):
+    def _normalize(img):
+        return img.astype(float) / np.max(img) if img is not None else None
+
+    return tuple(map(_normalize, images))
+
+
+def auto_canny(image, sigma=0.33):
+    # compute the median of the single channel pixel intensities
+    image = (image * 255 if np.max(image) <= 1 else image).astype(np.uint8)
+    v = np.median(image)
+
+    # apply automatic Canny edge detection using the computed median
+    lower = int(max(0, (1.0 - sigma) * v))
+    upper = int(min(255, (1.0 + sigma) * v))
+    edged = Canny(image, lower, upper)
+
+    # return the edged image
+    return edged
 
