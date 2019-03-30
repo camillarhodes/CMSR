@@ -223,7 +223,7 @@ def add_n_channels_dim(*images):
 
 def normalize_images(*images):
     def _normalize(img):
-        return img.astype(float) / np.max(img) if img is not None else None
+        return (img.astype(float) / np.max(img))[:,:,:3] if img is not None else None
 
     return tuple(map(_normalize, images))
 

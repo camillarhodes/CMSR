@@ -1,4 +1,6 @@
 import os
+import cv2
+import matplotlib.pyplot as plt
 
 
 class Config:
@@ -51,11 +53,16 @@ class Config:
     img_ext = 'png'
     guiding_img_ext = 'png'
 
-    def __init__(self, input_filter_depth=3, output_filter_depth=3, width=64, depth=8):
+    def __init__(self, input_filter_depth=3, output_filter_depth=3,
+                 guider_filter_depth=3,
+                 width=64, depth=8):
         self.width = width
         self.depth = depth
         # network meta params that by default are determined (by other params) by other params but can be changed
         self.filter_shape = ([[3, 3, input_filter_depth, self.width]] +
+                             [[3, 3, self.width, self.width]] * (self.depth-2) +
+                             [[3, 3, self.width, output_filter_depth]])
+        self.filter_shape_guider = ([[3, 3, guider_filter_depth, self.width]] +
                              [[3, 3, self.width, self.width]] * (self.depth-2) +
                              [[3, 3, self.width, output_filter_depth]])
 
@@ -69,25 +76,29 @@ class Config:
 X2_ONE_JUMP_IDEAL_CONF = Config()
 X2_ONE_JUMP_IDEAL_CONF.input_path = os.path.dirname(__file__) + '/set14'
 
-# [GUY] Disparity map config
-X2_ONE_JUMP_DISPARITY_CONF = Config(input_filter_depth=2,
-                                    output_filter_depth=1)
-X2_ONE_JUMP_DISPARITY_CONF.plot_losses = True
-X2_ONE_JUMP_DISPARITY_CONF.run_test_every = 20
-# thermal
-# X2_ONE_JUMP_DISPARITY_CONF.input_path = os.path.dirname(__file__) + '/agri-net-dataset-resized/'
-# X2_ONE_JUMP_DISPARITY_CONF.img_ext = 'tiff'
-# X2_ONE_JUMP_DISPARITY_CONF.guiding_img_ext = 'bmp'
-# depth
-X2_ONE_JUMP_DISPARITY_CONF.input_path = os.path.dirname(__file__) + '/Middlebury/Books/1'
-X2_ONE_JUMP_DISPARITY_CONF.img_ext = 'png'
-X2_ONE_JUMP_DISPARITY_CONF.cmap = 'gray'
-X2_ONE_JUMP_DISPARITY_CONF.scale_factors = [[5.0, 5.0]]  # list of pairs (vertical, horizontal) for gradual increments in resolution
-# X2_ONE_JUMP_DISPARITY_CONF.scale_factors = [[2.0, 2.0], [4.0, 4.5]]  # list of pairs (vertical, horizontal) for gradual increments in resolution
-# X2_ONE_JUMP_DISPARITY_CONF.scale_factors = [[4.0, 4.5]]  # list of pairs (vertical, horizontal) for gradual increments in resolution
-# X2_ONE_JUMP_DISPARITY_CONF.scale_factors = [[1.0, 2.0], [2.0, 1.0], [2.0, 2.0], [2.0, 3.0], [3.0, 2.0], [3.0, 3.0], [3.0, 4.0], [4.0, 3.0], [4.0, 4.0], [4.0, 4.5]]
-# X2_ONE_JUMP_DISPARITY_CONF.back_projection_iters = [6, 6, 6, 8, 8, 8, 10, 10, 12, 12]
-# X2_ONE_JUMP_DISPARITY_CONF.max_iters = 600
+# [GUY]
+THERMAL_IMAGES_CONF = Config(input_filter_depth=6)
+THERMAL_IMAGES_CONF.plot_losses = True
+THERMAL_IMAGES_CONF.run_test_every = 20
+THERMAL_IMAGES_CONF.input_path = os.path.dirname(__file__) + '/data_processed/current'
+THERMAL_IMAGES_CONF.img_ext = 'tiff'
+THERMAL_IMAGES_CONF.guiding_img_ext = 'jpg'
+THERMAL_IMAGES_CONF.max_iters = 600
+THERMAL_IMAGES_CONF.scale_factors = [[5.0, 5.0]] # enhance only
+# X1_THERMAL_IMAGES_CONF.noise_std = 0.125  # adding noise to lr-sons. small for real images, bigger for noisy images and zero for ideal case
+
+# [GUY]
+DEPTH_MAPS_CONF = Config(input_filter_depth=2,
+                         output_filter_depth=1)
+DEPTH_MAPS_CONF.input_path = os.path.dirname(__file__) + '/Middlebury/Books/1'
+DEPTH_MAPS_CONF.img_ext = 'png'
+DEPTH_MAPS_CONF.cmap = 'gray'
+DEPTH_MAPS_CONF.scale_factors = [[5.0, 5.0]]  # list of pairs (vertical, horizontal) for gradual increments in resolution
+# DEPTH_MAPS_CONF.scale_factors = [[2.0, 2.0], [4.0, 4.5]]  # list of pairs (vertical, horizontal) for gradual increments in resolution
+# DEPTH_MAPS_CONF.scale_factors = [[4.0, 4.5]]  # list of pairs (vertical, horizontal) for gradual increments in resolution
+# DEPTH_MAPS_CONF.scale_factors = [[1.0, 2.0], [2.0, 1.0], [2.0, 2.0], [2.0, 3.0], [3.0, 2.0], [3.0, 3.0], [3.0, 4.0], [4.0, 3.0], [4.0, 4.0], [4.0, 4.5]]
+DEPTH_MAPS_CONF.back_projection_iters = [6, 6, 6, 8, 8, 8, 10, 10, 12, 12]
+DEPTH_MAPS_CONF.max_iters = 600
 
 # Same as above but with visualization (Recommended for one image, interactive mode, for debugging)
 X2_IDEAL_WITH_PLOT_CONF = Config()

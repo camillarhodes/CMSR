@@ -27,7 +27,7 @@ def main(conf_name, gpu):
     for file_ind, input_file in enumerate(files):
 
         # Ground-truth file needs to be like the input file with _gt (if exists)
-        ground_truth_file = input_file[:-len(conf.img_ext) - 1] + '_gt.png'
+        ground_truth_file = input_file[:-len(conf.img_ext) - 1] + '_gt.' + conf.img_ext
         if not os.path.isfile(ground_truth_file):
             ground_truth_file = '0'
 

@@ -5,6 +5,7 @@ import cv2
 from matplotlib.gridspec import GridSpec
 from configs import Config
 from utils import *
+from stn import spatial_transformer_network as transformer
 
 
 class ZSSR:
@@ -51,6 +52,7 @@ class ZSSR:
     net_output_t = None
     loss_t = None
     train_op = None
+    train_op_localizator = None
     init_op = None
 
     # Parameters related to plotting and graphics
@@ -59,6 +61,8 @@ class ZSSR:
     lr_son_image_space = None
     hr_father_image_space = None
     out_image_space = None
+    stn_params = None
+    stn_params_t = None
 
     # Tensorflow graph default
     sess = None
@@ -118,8 +122,8 @@ class ZSSR:
             self.init_sess(init_weights=self.conf.init_net_for_each_sf)
 
             # Add a downscaled version of guider image for random_augment
-            if self.gi is not None:
-                self.scaled_gi = self.scale_guiding_im()
+            self.scaled_gi = self.scale_guiding_im() if self.gi is not None \
+                else None
 
             # Train the network
             self.train()
@@ -141,12 +145,12 @@ class ZSSR:
             # Save the final output if indicated
             if self.conf.save_results:
                 sf_str = ''.join('X%.2f' % s for s in self.conf.scale_factors[self.sf_ind])
-                # plt.imsave('%s/%s_zssr_%s.png' %
+                plt.imsave('%s/%s_zssr_%s.%s' %
+                           (self.conf.result_path, os.path.basename(self.file_name)[:-4], sf_str, self.conf.img_ext),
+                           post_processed_output, vmin=0, vmax=1)
+                # cv2.imwrite('%s/%s_zssr_%s.png' %
                 #            (self.conf.result_path, os.path.basename(self.file_name)[:-4], sf_str),
-                #            post_processed_output[:,:,0], vmin=0, vmax=1)
-                cv2.imwrite('%s/%s_zssr_%s.png' %
-                           (self.conf.result_path, os.path.basename(self.file_name)[:-4], sf_str),
-                           post_processed_output[:,:,0] * 255)
+                #            post_processed_output * 255)
 
             # verbose
             print('** Done training for sf=', sf, ' **')
@@ -171,8 +175,46 @@ class ZSSR:
             # Guider image
             self.hr_guider_t = tf.placeholder(tf.float32, name='hr_guider')
 
+            self.training = tf.placeholder_with_default(False, shape=(), name='is_training')
+
+
+            # STN transform the Guider image
+            # params
+            n_fc = 6
+            B, H, W, C = (1, self.conf.crop_size, self.conf.crop_size, self.conf.filter_shape_guider[0][2])
+
+            # identity transform
+            initial = np.array([[1., 0, 0], [0, 1., 0]])
+            initial = initial.astype('float32').flatten()
+            self.stn_params_t = tf.placeholder(tf.float32, name='stn_params')
+
+            # localization network
+            W_fc1 = tf.Variable(tf.zeros([H*W*C, n_fc]), name='W_fc1')
+            b_fc1 = tf.Variable(initial_value=initial, name='b_fc1')
+            localizator_vars = [W_fc1, b_fc1]
+            # b_fc1 = tf.Print(b_fc1, [b_fc1])
+
+            def get_params():
+                h_fc1 = tf.matmul(tf.reshape(self.hr_guider_t, (1, H*W*C)), W_fc1) + b_fc1
+                h_fc1 = tf.reshape(h_fc1, (n_fc,))
+                return h_fc1
+
+            def use_prev_params():
+                return self.stn_params_t
+
+            self.stn_params_t = tf.cond(self.training, get_params, use_prev_params)
+
+            # spatial transformer layer
+            self.hr_guider_t = transformer(self.hr_guider_t, self.stn_params_t)
+
             # Filters
             self.filters_t = [tf.get_variable(shape=meta.filter_shape[ind], name='filter_%d' % ind,
+                                              initializer=tf.random_normal_initializer(
+                                                  stddev=np.sqrt(meta.init_variance/np.prod(
+                                                      meta.filter_shape[ind][0:3]))))
+                              for ind in range(meta.depth)]
+
+            self.filters_t_guider = [tf.get_variable(shape=meta.filter_shape_guider[ind], name='filter_guider_%d' % ind,
                                               initializer=tf.random_normal_initializer(
                                                   stddev=np.sqrt(meta.init_variance/np.prod(
                                                       meta.filter_shape[ind][0:3]))))
@@ -190,25 +232,35 @@ class ZSSR:
             # Define first layer
             first_layer = concat_layer if concat_layer is not None else self.lr_son_t
 
+            # Define layers
             self.layers_t = [first_layer] + [None] * meta.depth
+            self.layers_t_guider = [self.hr_guider_t] + [None] * meta.depth
 
             for l in range(meta.depth - 1):
                 self.layers_t[l + 1] = tf.nn.relu(tf.nn.conv2d(self.layers_t[l], self.filters_t[l],
+                                                               [1, 1, 1, 1], "SAME", name='layer_%d' % (l + 1)))
+                self.layers_t_guider[l + 1] = tf.nn.relu(tf.nn.conv2d(self.layers_t_guider[l], self.filters_t_guider[l],
                                                                [1, 1, 1, 1], "SAME", name='layer_%d' % (l + 1)))
 
             # Last conv layer (Separate because no ReLU here)
             l = meta.depth - 1
             self.layers_t[-1] = tf.nn.conv2d(self.layers_t[l], self.filters_t[l],
                                              [1, 1, 1, 1], "SAME", name='layer_%d' % (l + 1))
+            self.layers_t_guider[-1] = tf.nn.conv2d(self.layers_t_guider[l], self.filters_t_guider[l],
+                                             [1, 1, 1, 1], "SAME", name='layer_%d' % (l + 1))
 
             # Output image (Add last conv layer result to input, residual learning with global skip connection)
-            self.net_output_t = self.layers_t[-1] + self.conf.learn_residual * self.lr_son_t
+            self.net_output_t = self.layers_t[-1] + self.layers_t_guider[-1] + self.conf.learn_residual * self.lr_son_t
+            # self.net_output_t = self.layers_t[-1] + self.conf.learn_residual * self.lr_son_t
 
             # Final loss (L1 loss between label and output layer)
             self.loss_t = tf.reduce_mean(tf.reshape(tf.abs(self.net_output_t - self.hr_father_t), [-1]))
 
             # Apply adam optimizer
-            self.train_op = tf.train.AdamOptimizer(learning_rate=self.learning_rate_t).minimize(self.loss_t)
+            self.train_op = tf.train.AdamOptimizer(learning_rate=self.learning_rate_t).minimize(
+                self.loss_t, var_list=[v for v in tf.trainable_variables() if v not in localizator_vars]
+            )
+            self.train_op_localizator = tf.train.AdamOptimizer(learning_rate=self.learning_rate_t / 1000).minimize(self.loss_t, var_list=localizator_vars)
             self.init_op = tf.initialize_all_variables()
 
     def init_sess(self, init_weights=True):
@@ -263,11 +315,16 @@ class ZSSR:
         feed_dict = {'learning_rate:0': self.learning_rate,
                      'lr_son:0': np.expand_dims(interpolated_lr_son, 0),
                      'hr_father:0': np.expand_dims(hr_father, 0),
-                     'hr_guider:0': np.expand_dims(hr_guider, 0) if hr_guider is not None else None}
+                     'hr_guider:0': np.expand_dims(hr_guider, 0) if hr_guider is not None else None,
+                     'is_training:0': True,
+                     'stn_params:0': self.stn_params
+                     }
 
         # Run network
-        _, self.loss[self.iter], train_output = self.sess.run([self.train_op, self.loss_t, self.net_output_t],
-                                                              feed_dict)
+        _1, _2,  self.loss[self.iter], train_output, self.stn_params, self.hr_guider = \
+            self.sess.run(
+                [self.train_op, self.train_op_localizator, self.loss_t, self.net_output_t, self.stn_params_t, self.hr_guider_t], feed_dict
+            )
         return np.clip(np.squeeze(train_output), 0, 1)
 
     def forward_pass(self, lr_son, hr_guider, hr_father_shape=None):
@@ -282,7 +339,8 @@ class ZSSR:
 
         # Create feed dict
         feed_dict = {'lr_son:0': np.expand_dims(interpolated_lr_son, 0),
-                     'hr_guider:0': np.expand_dims(hr_guider, 0) if hr_guider is not None else None}
+                     'hr_guider:0': np.expand_dims(hr_guider, 0) if hr_guider is not None else None,
+                     'stn_params:0': self.stn_params}
 
         # Run network
         return np.clip(np.squeeze(self.sess.run([self.net_output_t], feed_dict)), 0, 1)
@@ -335,7 +393,7 @@ class ZSSR:
 
         # 3. True MSE of simple interpolation for reference (only if ground-truth was given)
         interp_sr = imresize(self.input, self.sf, self.output_shape, self.conf.upscale_method)
-        self.interp_mse = (self.interp_mse + [np.mean(np.ndarray.flatten(np.square(self.gt_per_sf - interp_sr[:,:,0])))]
+        self.interp_mse = (self.interp_mse + [np.mean(np.ndarray.flatten(np.square(self.gt_per_sf - interp_sr)))]
                            if self.gt_per_sf is not None else None)
 
         # 4. Reconstruction MSE of simple interpolation over downscaled input
@@ -484,6 +542,7 @@ class ZSSR:
             self.lr_son_image_space = plt.subplot(grid[3, 0])
             self.hr_father_image_space = plt.subplot(grid[3, 3])
             self.out_image_space = plt.subplot(grid[3, 1])
+            self.hr_guider_image_space = plt.subplot(grid[3, 2])
 
             # Activate interactive mode for live plot updating
             plt.ion()
@@ -518,6 +577,8 @@ class ZSSR:
         self.lr_son_image_space.imshow(self.lr_son, vmin=0.0, vmax=1.0, cmap=self.conf.cmap)
         self.out_image_space.imshow(self.train_output, vmin=0.0, vmax=1.0, cmap=self.conf.cmap)
         self.hr_father_image_space.imshow(self.hr_father, vmin=0.0, vmax=1.0, cmap=self.conf.cmap)
+        if self.gi is not None:
+            self.hr_guider_image_space.imshow(self.hr_guider[0], vmin=0.0, vmax=1.0, cmap=self.conf.cmap)
 
         # These line are needed in order to see the graphics at real time
         self.fig.canvas.draw()
