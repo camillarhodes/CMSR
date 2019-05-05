@@ -5,7 +5,7 @@ import cv2
 from matplotlib.gridspec import GridSpec
 from configs import Config
 from utils import *
-from stn import spatial_transformer_network as transformer
+from generic_stn import generic_grid_generator, generic_spatial_transformer_network as generic_transformer
 
 
 class ZSSR:
@@ -52,7 +52,7 @@ class ZSSR:
     net_output_t = None
     loss_t = None
     train_op = None
-    train_op_localizator = None
+    train_op_refinement = None
     init_op = None
 
     # Parameters related to plotting and graphics
@@ -61,8 +61,6 @@ class ZSSR:
     lr_son_image_space = None
     hr_father_image_space = None
     out_image_space = None
-    stn_params = None
-    stn_params_t = None
 
     # Tensorflow graph default
     sess = None
@@ -177,35 +175,21 @@ class ZSSR:
 
             self.training = tf.placeholder_with_default(False, shape=(), name='is_training')
 
+            # B, H, W, C = (1, self.conf.crop_size, self.conf.crop_size, self.conf.filter_shape_guider[0][2])
 
-            # STN transform the Guider image
-            # params
-            n_fc = 6
-            B, H, W, C = (1, self.conf.crop_size, self.conf.crop_size, self.conf.filter_shape_guider[0][2])
+            # # make generic grid
+            # batch_grids_t = tf.Variable(initial_value=generic_grid_generator(H, W, B), trainable=True)
 
-            # identity transform
-            initial = np.array([[1., 0, 0], [0, 1., 0]])
-            initial = initial.astype('float32').flatten()
-            self.stn_params_t = tf.placeholder(tf.float32, name='stn_params')
+            # refinement_vars = [batch_grids_t]
+            refinement_vars = []
 
-            # localization network
-            W_fc1 = tf.Variable(tf.zeros([H*W*C, n_fc]), name='W_fc1')
-            b_fc1 = tf.Variable(initial_value=initial, name='b_fc1')
-            localizator_vars = [W_fc1, b_fc1]
-            # b_fc1 = tf.Print(b_fc1, [b_fc1])
+            # def get_refined_guider():
+            #     return generic_transformer(self.hr_guider_t, batch_grids_t)
 
-            def get_params():
-                h_fc1 = tf.matmul(tf.reshape(self.hr_guider_t, (1, H*W*C)), W_fc1) + b_fc1
-                h_fc1 = tf.reshape(h_fc1, (n_fc,))
-                return h_fc1
+            # def get_guider():
+            #     return self.hr_guider_t
 
-            def use_prev_params():
-                return self.stn_params_t
-
-            self.stn_params_t = tf.cond(self.training, get_params, use_prev_params)
-
-            # spatial transformer layer
-            self.hr_guider_t = transformer(self.hr_guider_t, self.stn_params_t)
+            # self.hr_guider_t = tf.cond(self.training, get_refined_guider, get_guider)
 
             # Filters
             self.filters_t = [tf.get_variable(shape=meta.filter_shape[ind], name='filter_%d' % ind,
@@ -256,11 +240,15 @@ class ZSSR:
             # Final loss (L1 loss between label and output layer)
             self.loss_t = tf.reduce_mean(tf.reshape(tf.abs(self.net_output_t - self.hr_father_t), [-1]))
 
+            # guider loss (L1 loss between label and output layer)
+            loss_guider_t = tf.reduce_mean(tf.reshape(tf.abs(self.net_output_t - self.hr_guider_t), [-1]))
+            self.loss_t += loss_guider_t
+
             # Apply adam optimizer
             self.train_op = tf.train.AdamOptimizer(learning_rate=self.learning_rate_t).minimize(
-                self.loss_t, var_list=[v for v in tf.trainable_variables() if v not in localizator_vars]
+                self.loss_t, var_list=[v for v in tf.trainable_variables() if v not in refinement_vars]
             )
-            self.train_op_localizator = tf.train.AdamOptimizer(learning_rate=self.learning_rate_t / 1000).minimize(self.loss_t, var_list=localizator_vars)
+            # self.train_op_refinement = tf.train.AdamOptimizer(learning_rate=self.learning_rate_t / 1000).minimize(self.loss_t, var_list=refinement_vars)
             self.init_op = tf.initialize_all_variables()
 
     def init_sess(self, init_weights=True):
@@ -317,13 +305,14 @@ class ZSSR:
                      'hr_father:0': np.expand_dims(hr_father, 0),
                      'hr_guider:0': np.expand_dims(hr_guider, 0) if hr_guider is not None else None,
                      'is_training:0': True,
-                     'stn_params:0': self.stn_params
                      }
 
         # Run network
-        _1, _2,  self.loss[self.iter], train_output, self.stn_params, self.hr_guider = \
+        # _1, _2,  self.loss[self.iter], train_output, self.hr_guider = \
+        _, self.loss[self.iter], train_output, self.hr_guider = \
             self.sess.run(
-                [self.train_op, self.train_op_localizator, self.loss_t, self.net_output_t, self.stn_params_t, self.hr_guider_t], feed_dict
+                # [self.train_op, self.train_op_refinement, self.loss_t, self.net_output_t, self.hr_guider_t], feed_dict
+                [self.train_op, self.loss_t, self.net_output_t, self.hr_guider_t], feed_dict
             )
         return np.clip(np.squeeze(train_output), 0, 1)
 
@@ -340,7 +329,7 @@ class ZSSR:
         # Create feed dict
         feed_dict = {'lr_son:0': np.expand_dims(interpolated_lr_son, 0),
                      'hr_guider:0': np.expand_dims(hr_guider, 0) if hr_guider is not None else None,
-                     'stn_params:0': self.stn_params}
+                     }
 
         # Run network
         return np.clip(np.squeeze(self.sess.run([self.net_output_t], feed_dict)), 0, 1)
@@ -406,7 +395,11 @@ class ZSSR:
         # Display test results if indicated
         if self.conf.display_test_results:
             print('iteration: ', self.iter, 'reconstruct mse:', self.mse_rec[-1],'reconstruct psnr:', self.psnr_rec[-1], ', true mse:', (self.mse[-1])
-                                                                                                  if self.mse else None)
+                  if self.mse else None)
+
+        if not self.iter % 100:
+            import ipdb; ipdb.set_trace()  # XXX BREAKPOINT
+
 
         # plot losses if needed
         if self.conf.plot_losses:

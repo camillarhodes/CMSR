@@ -80,12 +80,12 @@ X2_ONE_JUMP_IDEAL_CONF.input_path = os.path.dirname(__file__) + '/set14'
 THERMAL_IMAGES_CONF = Config(input_filter_depth=6)
 THERMAL_IMAGES_CONF.plot_losses = True
 THERMAL_IMAGES_CONF.run_test_every = 20
-THERMAL_IMAGES_CONF.input_path = os.path.dirname(__file__) + '/data_processed/current'
-THERMAL_IMAGES_CONF.img_ext = 'tiff'
-THERMAL_IMAGES_CONF.guiding_img_ext = 'jpg'
+THERMAL_IMAGES_CONF.input_path = os.path.dirname(__file__) + '/Flip_aligned_2'
+THERMAL_IMAGES_CONF.img_ext = 'png'
+THERMAL_IMAGES_CONF.guiding_img_ext = 'png'
 THERMAL_IMAGES_CONF.max_iters = 600
-THERMAL_IMAGES_CONF.scale_factors = [[5.0, 5.0]] # enhance only
-# X1_THERMAL_IMAGES_CONF.noise_std = 0.125  # adding noise to lr-sons. small for real images, bigger for noisy images and zero for ideal case
+THERMAL_IMAGES_CONF.scale_factors = [[2.0, 2.0]] # enhance only
+# THERMAL_IMAGES_CONF.noise_std = 0.05  # adding noise to lr-sons. small for real images, bigger for noisy images and zero for ideal case
 
 # [GUY]
 DEPTH_MAPS_CONF = Config(input_filter_depth=2,
