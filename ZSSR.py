@@ -97,8 +97,11 @@ class ZSSR:
         # Later on, if we use gradual sr increments, results for intermediate scales will be added as sources.
         self.hr_fathers_sources = [self.input]
 
+        # add guider of the same dimensions as the input (downsample)
         if self.gi is not None:
-            self.hr_guiders_sources = [self.scale_guiding_im()]
+            self.hr_guiders_sources = [
+                np.clip(imresize(self.gi, None, self.input.shape, kernel=self.kernel), 0, 1)
+            ]
 
         # We keep the input file name to save the output with a similar name. If array was given rather than path
         # then we use default provided by the configs
@@ -119,9 +122,9 @@ class ZSSR:
             # Initialize network
             self.init_sess(init_weights=self.conf.init_net_for_each_sf)
 
-            # Add a downscaled version of guider image for random_augment
-            self.scaled_gi = self.scale_guiding_im() if self.gi is not None \
-                else None
+            # add guider of the right scale
+            if self.gi is not None:
+                self.scaled_gi = np.clip(imresize(self.gi, None, self.output_shape, kernel=self.kernel), 0, 1)
 
             # Train the network
             self.train()
@@ -132,9 +135,8 @@ class ZSSR:
             # Keep the results for the next scale factors SR to use as dataset
             self.hr_fathers_sources.append(post_processed_output)
 
-            # add guider of the right scale
-            if self.gi is not None:
-                self.hr_guiders_sources.append(self.scaled_gi)
+            # TODO: need this line?
+            self.hr_guiders_sources.append(self.scaled_gi)
 
             # In some cases, the current output becomes the new input. If indicated and if this is the right scale to
             # become the new base input. all of these conditions are checked inside the function.
@@ -239,10 +241,6 @@ class ZSSR:
 
             # Final loss (L1 loss between label and output layer)
             self.loss_t = tf.reduce_mean(tf.reshape(tf.abs(self.net_output_t - self.hr_father_t), [-1]))
-
-            # guider loss (L1 loss between label and output layer)
-            loss_guider_t = tf.reduce_mean(tf.reshape(tf.abs(self.net_output_t - self.hr_guider_t), [-1]))
-            self.loss_t += loss_guider_t
 
             # Apply adam optimizer
             self.train_op = tf.train.AdamOptimizer(learning_rate=self.learning_rate_t).minimize(
@@ -451,10 +449,6 @@ class ZSSR:
         # Create son out of the father by downscaling and if indicated adding noise
         lr_son = imresize(hr_father, 1.0 / self.sf, kernel=self.kernel)
         return np.clip(lr_son + np.random.randn(*lr_son.shape) * self.conf.noise_std, 0, 1)
-
-    def scale_guiding_im(self):
-        sf = self.sf if self.sf is not None else np.array([self.base_sf, self.base_sf])
-        return np.clip(imresize(self.gi, sf / self.conf.scale_factors[-1] if self.output_shape is None else None, self.output_shape, kernel=self.kernel), 0, 1)
 
     def final_test(self):
         # Run over 8 augmentations of input - 4 rotations and mirror (geometric self ensemble)
