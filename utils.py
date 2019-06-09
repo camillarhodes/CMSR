@@ -23,7 +23,7 @@ def random_augment(ims,
                    shear_sigma=0.01,
                    crop_size=128):
     # fix randomness
-    np.random.seed(0)
+    # np.random.seed(0)
 
     # Determine which kind of augmentation takes place according to probabilities
     random_chooser = np.random.rand()
@@ -41,7 +41,7 @@ def random_augment(ims,
         mode = 'affine'
 
     # TODO: remove this when supported
-    mode = 'no_interp'
+    # mode = 'no_interp'
 
     # If scales not given, calculate them according to sizes of images. This would be suboptimal, because when scales
     # are not integers, different scales can have the same image shape.
@@ -189,7 +189,8 @@ def random_augment(ims,
     augmented_guiding_grid = np.stack([augmentation_grid(guiding_grid[0][0]), augmentation_grid(guiding_grid[0][1])])
     augmented_guiding_grid = np.expand_dims(augmented_guiding_grid, 0)
 
-    return augmented_im, augmented_guiding_im, augmented_guiding_grid
+    return augmented_im, guiding_im, augmented_guiding_grid
+    # return augmented_im, augmented_guiding_im, augmented_guiding_grid
 
 
 def back_projection(y_sr, y_lr, down_kernel, up_kernel, sf=None):
