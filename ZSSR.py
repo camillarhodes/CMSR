@@ -1,8 +1,6 @@
 import tensorflow as tf
 import matplotlib.pyplot as plt
 import matplotlib.image as img
-import cv2
-import bicubic_downsample
 import ipdb
 import signal
 
@@ -18,16 +16,15 @@ class ZSSR:
     learning_rate = None
     hr_father = None
     hr_guider = None
-    guider_grid = None
-    hr_guider_grid = None
     lr_son = None
     sr = None
     sf = None
     gt_per_sf = None
     final_sr = None
+    augmented_grid = None
+    augmented_grid_t = None
     hr_fathers_sources = []
     hr_guiders_sources = []
-    hr_guiders_grids = []
 
     # Output variables initialization / declaration
     reconstruct_output = None
@@ -56,8 +53,7 @@ class ZSSR:
     lr_son_t = None
     hr_father_t = None
     hr_guider_t = None
-    hr_guider_grid_t = None
-    hr_guider_grid_var = None
+    gi_grid = None
     filters_t = None
     layers_t = None
     net_output_t = None
@@ -128,7 +124,6 @@ class ZSSR:
         # Run gradually on all scale factors (if only one jump then this loop only happens once)
         for self.sf_ind, (sf, self.kernel) in enumerate(zip(self.conf.scale_factors, self.kernels)):
 
-
             print('** Start training for sf=', sf, ' **')
 
             # Relative_sf (used when base change is enabled. this is when input is the output of some previous scale)
@@ -136,6 +131,8 @@ class ZSSR:
                 sf = [sf, sf]
             self.sf = np.array(sf) / np.array(self.base_sf)
             self.output_shape = np.uint(np.ceil(np.array(self.input.shape[0:2]) * sf))
+
+            # TODO: with multiple sf, maybe we need to downscale self.gi here?
 
             # Build network computational graph
             # This happens on every new sf because of the downsampling layer
@@ -150,10 +147,6 @@ class ZSSR:
                 # add guider of the right scale
                 self.hr_guiders_sources.append(self.gi)
 
-                # initialize grid sampler
-                B, H, W, C = (1, self.gi.shape[0], self.gi.shape[1], self.conf.filter_shape_guider[0][2])
-                self.guider_grid = generic_grid_generator(H, W, B)
-                self.hr_guiders_grids.append(self.guider_grid)
 
             # Train the network
             self.train()
@@ -203,26 +196,34 @@ class ZSSR:
             # Guider image
             self.hr_guider_t = tf.placeholder(tf.float32, name='hr_guider')
 
-            # Guider grid
-            self.hr_guider_grid_t = tf.placeholder(tf.float32, name='hr_guider_grid')
-
-            # this variable is used only when training the grid
+            # Guider grid, for learning to warp the guider image
             B, H, W, C = (1, self.gi.shape[0], self.gi.shape[1], self.conf.filter_shape_guider[0][2])
-            self.hr_guider_grid_var = tf.Variable(initial_value=generic_grid_generator(H, W, B))
+            self.gi_grid = tf.Variable(initial_value=generic_grid_generator(H, W, B))
 
-            self.train_grid = tf.placeholder_with_default(False, shape=(), name='train_grid')
+            # Transform matrix for augmenting the grid
+            self.augmentation_mat_grid = tf.placeholder(tf.float32, name='augmentation_mat_grid')
 
-            self.downscale_guider = tf.placeholder_with_default(False, shape=(), name='downscale_guider')
+            # Transformation output shape
+            self.augmentation_output_shape = tf.placeholder(tf.int32, name='augmentation_output_shape')
+
+            # Projective transformation - 8 degrees of freedom
+            self.augmentation_mat_grid.set_shape([8])
+
+            augmented_grid_x = tf.contrib.image.transform(self.gi_grid[0][0], self.augmentation_mat_grid, interpolation='BILINEAR', output_shape=self.augmentation_output_shape)
+            augmented_grid_y = tf.contrib.image.transform(self.gi_grid[0][1], self.augmentation_mat_grid, interpolation='BILINEAR', output_shape=self.augmentation_output_shape)
+            augmented_grid_t = tf.stack([augmented_grid_x, augmented_grid_y])
+            self.augmented_grid_t = tf.expand_dims(augmented_grid_t, 0)
+
+            should_warp_guider = tf.placeholder_with_default(True, shape=(), name='should_warp_guider')
 
             def get_warped_guider():
-                """Samples the guider image through the grid"""
-                return generic_transformer(self.hr_guider_t, self.hr_guider_grid_t)
+                return generic_transformer(self.hr_guider_t, self.augmented_grid_t)
 
-            def get_trainable_warped_guider():
-                """Samples the guider image through a trainable grid with backpropagation"""
-                return generic_transformer(self.hr_guider_t, self.hr_guider_grid_var)
+            # sometimes we do the warping outside (like in final_test)
+            def get_original_guider():
+                return self.hr_guider_t
 
-            self.hr_guider_t = tf.cond(self.train_grid, get_trainable_warped_guider, get_warped_guider)
+            self.hr_guider_t = tf.cond(should_warp_guider, get_warped_guider, get_original_guider)
 
             # Filters
             self.filters_t = [tf.get_variable(shape=meta.filter_shape[ind], name='filter_%d' % ind,
@@ -236,25 +237,6 @@ class ZSSR:
                                                   stddev=np.sqrt(meta.init_variance/np.prod(
                                                       meta.filter_shape[ind][0:3]))))
                               for ind in range(meta.depth)]
-
-            # Build the network
-
-
-            # self.hr_guider_t = tf.image.resize_bicubic(self.hr_guider_t, (self.conf.crop_size, self.conf.crop_size), align_corners=True)
-
-            bicubic_filter = bicubic_downsample.build_filter(int(self.sf[0]), int(self.sf[1]))
-
-            def get_downscaled_guider():
-                """Downscales the guider by self.sf in order to match lr_son dimensions"""
-                return bicubic_downsample.apply_bicubic_downsample(self.hr_guider_t, bicubic_filter, int(self.sf[0]), int(self.sf[1]))
-
-            def get_guider():
-                return self.hr_guider_t
-
-            self.hr_guider_t = tf.cond(self.downscale_guider, get_downscaled_guider, get_guider)
-
-
-            # self.hr_guider_t = tf.image.resize_bicubic(self.hr_guider_t, lr_son_h_w, align_corners=True)
 
 
             # Define merging layer for the guider image if needed
@@ -285,16 +267,15 @@ class ZSSR:
 
             # Output image (Add last conv layer result to input, residual learning with global skip connection)
             self.net_output_t = self.layers_t[-1] + self.layers_t_guider[-1] + self.conf.learn_residual * self.lr_son_t
-            # self.net_output_t = self.layers_t[-1] + 0.5 * self.conf.learn_residual * self.lr_son_t
 
             # Final loss (L1 loss between label and output layer)
             self.loss_t = tf.reduce_mean(tf.reshape(tf.abs(self.net_output_t - self.hr_father_t), [-1]))
 
             # Apply adam optimizer
             optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate_t)
-            self.train_op = optimizer.minimize(self.loss_t, var_list=list(set(tf.trainable_variables()) - {self.hr_guider_grid_var}))
-            grid_optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate_t / 10)
-            self.train_grid_op = grid_optimizer.minimize(self.loss_t, var_list=[self.hr_guider_grid_var])
+            self.train_op = optimizer.minimize(self.loss_t, var_list=list(set(tf.trainable_variables()) - {self.gi_grid}))
+            grid_optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate_t / 100)
+            self.train_grid_op = grid_optimizer.minimize(self.loss_t, var_list=[self.gi_grid])
             self.init_op = tf.initialize_all_variables()
 
     def init_sess(self, init_weights=True):
@@ -333,7 +314,7 @@ class ZSSR:
                               # np.any(np.abs(self.sf - self.conf.scale_factors[-1]) > 0.01))
                           else self.gt)
 
-    def forward_backward_pass(self, lr_son, hr_father, hr_guider, hr_guider_grid=None, train_grid=False):
+    def forward_backward_pass(self, lr_son, hr_father, hr_guider, augmentation_mat_grid):
         # First gate for the lr-son into the network is interpolation to the size of the father
         # Note: we specify both output_size and scale_factor. best explained by example: say father size is 9 and sf=2,
         # small_son size is 4. if we upscale by sf=2 we get wrong size, if we upscale to size 9 we get wrong sf.
@@ -351,35 +332,18 @@ class ZSSR:
                      'lr_son:0': np.expand_dims(interpolated_lr_son, 0),
                      'hr_father:0': np.expand_dims(hr_father, 0),
                      'hr_guider:0': np.expand_dims(hr_guider, 0) if hr_guider is not None else None,
-                     'hr_guider_grid:0': hr_guider_grid,
-                     'train_grid:0': train_grid,
-                     'downscale_guider:0': True,
+                     'augmentation_mat_grid:0': augmentation_mat_grid,
+                     'augmentation_output_shape:0': interpolated_lr_son.shape[:2]
                      }
 
         # Run network
-        if train_grid:
-            _1, self.loss_rec[self.iter], train_output = \
-                self.sess.run(
-                    [self.train_grid_op, self.loss_t, self.net_output_t], feed_dict
-                )
-
-            # optimize guider grid
-            optimized_hr_guider_grid = self.hr_guider_grid_var.eval(session=self.sess)
-
-            # replace old grid with optimized grid
-            idx = self.hr_guiders_grids.index(self.guider_grid)
-            self.hr_guiders_grids.pop(idx)
-            self.hr_guiders_grids.insert(idx , optimized_hr_guider_grid)
-            self.guider_grid = optimized_hr_guider_grid
-        else:
-            _1, self.loss[self.iter], train_output = \
-                self.sess.run(
-                    [self.train_op, self.loss_t, self.net_output_t], feed_dict
-                )
-
+        _1, _2, self.loss[self.iter], train_output, self.augmented_grid = \
+            self.sess.run(
+                [self.train_grid_op, self.train_op, self.loss_t, self.net_output_t, self.augmented_grid_t], feed_dict
+            )
         return np.clip(np.squeeze(train_output), 0, 1)
 
-    def forward_pass(self, lr_son, hr_guider, hr_guider_grid, hr_father_shape=None, downscale_guider=True):
+    def forward_pass(self, lr_son, hr_guider, hr_father_shape=None, augmentation_mat_grid=None, should_warp_guider=True):
         # First gate for the lr-son into the network is interpolation to the size of the father
         interpolated_lr_son = imresize(lr_son, self.sf, hr_father_shape, self.conf.upscale_method)
 
@@ -388,11 +352,18 @@ class ZSSR:
         if hr_guider is not None:
             hr_guider, = add_n_channels_dim(hr_guider)
 
+        # could be 1 ratio (like when running on full size input with full size guider)
+        guider_to_im_ratio = np.divide(self.gi.shape, hr_father_shape)[:2]
+
+        # if not augmentation sent, only perform downscaling
+        augmentation_mat_grid = augmentation_mat_grid or np.array([guider_to_im_ratio[0], 0, 0, 0, guider_to_im_ratio[1], 0, 0, 0])
+
         # Create feed dict
         feed_dict = {'lr_son:0': np.expand_dims(interpolated_lr_son, 0),
                      'hr_guider:0': np.expand_dims(hr_guider, 0) if hr_guider is not None else None,
-                     'hr_guider_grid:0': hr_guider_grid,
-                     'downscale_guider:0': downscale_guider,
+                     'augmentation_mat_grid:0': augmentation_mat_grid,
+                     'augmentation_output_shape:0': interpolated_lr_son.shape[:2],
+                     'should_warp_guider:0': should_warp_guider,
                      }
 
         # Run network
@@ -427,14 +398,14 @@ class ZSSR:
         # There are four evaluations needed to be calculated:
 
         # Run net on the input to get the output super-resolution (almost final result, only post-processing needed)
-        self.sr = self.forward_pass(self.input, self.gi, self.guider_grid, self.gi.shape if self.gi is not None else None, downscale_guider=False)
+        self.sr = self.forward_pass(self.input, self.gi, self.gi.shape if self.gi is not None else None)
 
         # 1. True MSE (only if ground-truth was given), note: this error is before post-processing.
         self.mse = (self.mse + [np.mean(np.ndarray.flatten(np.square(self.gt_per_sf - self.sr)))]
                     if self.gt_per_sf is not None else None)
 
         # 2. Reconstruction MSE, run for reconstruction- try to reconstruct the input from a downscaled version of it
-        self.reconstruct_output = self.forward_pass(self.father_to_son(self.input), self.father_to_son(self.gi), self.guider_grid, self.input.shape)
+        self.reconstruct_output = self.forward_pass(self.father_to_son(self.input), self.father_to_son(self.gi), self.input.shape)
 
         # [GUY] add n_channels when needed
         self.input, self.reconstruct_output = add_n_channels_dim(self.input, self.reconstruct_output)
@@ -477,12 +448,9 @@ class ZSSR:
             # Use augmentation from original input image to create current father.
             # If other scale factors were applied before, their result is also used (hr_fathers_in)
 
-            # hr_guider is before augmentation (that will apply with
-            # hr_guider_grid!)
-            self.hr_father, self.hr_guider, self.hr_guider_grid = random_augment(
+            chosen_image, chosen_guider, chosen_augmentation, chosen_augmentation_grid = random_augment(
                 ims=self.hr_fathers_sources,
                 guiding_ims=self.hr_guiders_sources,
-                guiding_grids=self.hr_guiders_grids,
                 base_scales=[1.0] + self.conf.scale_factors,
                 leave_as_is_probability=self.conf.augment_leave_as_is_probability,
                 no_interpolate_probability=self.conf.augment_no_interpolate_probability,
@@ -493,18 +461,21 @@ class ZSSR:
                 shear_sigma=self.conf.augment_shear_sigma,
                 crop_size=self.conf.crop_size)
 
+            self.hr_father = tf.contrib.image.transform(
+                chosen_image, chosen_augmentation, interpolation='BILINEAR', output_shape=(self.conf.crop_size, self.conf.crop_size)
+            ).eval(session=tf.Session())
+
             # Get lr-son from hr-father
             self.lr_son = self.father_to_son(self.hr_father)
 
+            self.hr_guider = chosen_guider
+
             # run network forward and back propagation, one iteration (This is the heart of the training)
-            self.train_output = self.forward_backward_pass(self.lr_son, self.hr_father, self.hr_guider, self.hr_guider_grid)
-            if not self.iter % 5000:
-                self.reconstruct_output = self.forward_backward_pass(self.father_to_son(self.input), self.input, self.father_to_son(self.gi), train_grid=True)
+            self.train_output = self.forward_backward_pass(self.lr_son, self.hr_father, self.hr_guider, chosen_augmentation_grid)
 
             # Display info and save weights
             if not self.iter % self.conf.display_every:
                 print('sf:', self.sf*self.base_sf, ', iteration: ', self.iter, ', loss: ', self.loss[self.iter], ', loss_rec: ', self.loss_rec[self.iter])
-                print np.abs((np.sum(np.abs(self.guider_grid)) - 77081.05))
 
             # Test network
             if self.conf.run_test and (not self.iter % self.conf.run_test_every):
@@ -527,27 +498,46 @@ class ZSSR:
 
     def final_test(self):
         # Run over 8 augmentations of input - 4 rotations and mirror (geometric self ensemble)
+        # Rotate 90*k degrees and mirror flip when k>=4
+
         outputs = []
+
+        def rotate_and_flip(input, k, grid=None):
+            # rotate and flip the input
+            rotated_input =  np.rot90(input, k) \
+                if k < 4 else np.fliplr(np.rot90(input, k))
+
+            # rotate the grid if needed
+            if grid:
+                # swap axes to match for format of tf.rot90
+                swapped_grid = tf.transpose(grid,[2,3,1,0])[:,:,:,0]
+                # rotate and flip
+                rotated_grid = tf.image.rot90(swapped_grid, k)  \
+                    if k < 4 else tf.image.flip_left_right(tf.image.rot90(swapped_grid, k))
+                # swap axes back
+                rotated_grid = tf.expand_dims(tf.transpose(rotated_grid,[2,0,1]),0)
+
+            return rotated_input, rotated_grid if grid else None
 
         # The weird range means we only do it once if output_flip is disabled
         # We need to check if scale factor is symmetric to all dimensions, if not we will do 180 jumps rather than 90
-        def rotator(to_rotate, k):
-            return np.rot90(to_rotate, k) if k < 4 else np.fliplr(np.rot90(to_rotate, k))
-
         for k in range(0, 1 + 7 * self.conf.output_flip, 1 + int(self.sf[0] != self.sf[1])):
-            # Rotate 90*k degrees and mirror flip when k>=4
-            test_input = rotator(self.input, k)
 
-            test_gi = None
-            if self.gi is not None:
-                # test_gi = rotator(self.gi, k)
-                grid_x = rotator(self.guider_grid[0][0], k)
-                grid_y = rotator(self.guider_grid[0][1], k)
-                test_guiding_grid = np.stack([grid_x, grid_y])
-                test_guiding_grid = np.expand_dims(test_guiding_grid, 0)
+            test_input, test_grid = rotate_and_flip(self.input, k, grid=self.gi_grid)
+
+            # I don't know why we need this model line.
+            # probably because TF is garbage
+            with self.model.as_default():
+                warped_gi = generic_transformer(
+                    np.expand_dims(self.gi.astype(np.float32), 0), test_grid
+                ).eval(session=self.sess)[0]
 
             # Apply network on the rotated input
-            tmp_output = self.forward_pass(test_input, self.gi, test_guiding_grid, hr_father_shape=test_gi.shape if test_gi is not None else None, downscale_guider=False)
+            tmp_output = self.forward_pass(
+                test_input, warped_gi,
+                hr_father_shape=warped_gi.shape if self.gi is not None else None,
+                should_warp_guider=False # as we just warped the guider here
+            )
 
             # Undo the rotation for the processed output (mind the opposite order of the flip and the rotation)
             tmp_output = np.rot90(tmp_output, -k) if k < 4 else np.rot90(np.fliplr(tmp_output), -k)
@@ -646,13 +636,20 @@ class ZSSR:
         self.lr_son_image_space.imshow(self.lr_son, vmin=0.0, vmax=1.0, cmap=self.conf.cmap)
         self.out_image_space.imshow(self.train_output, vmin=0.0, vmax=1.0, cmap=self.conf.cmap)
         self.hr_father_image_space.imshow(self.hr_father, vmin=0.0, vmax=1.0, cmap=self.conf.cmap)
-        if self.gi is not None:
+
+        if self.hr_guider is not None:
             # self.hr_guider_image_space.imshow(self.hr_guider, vmin=0.0, vmax=1.0, cmap=self.conf.cmap)
-            # TODO: show both guider and warped guider
-            warped_guider_t = generic_transformer(np.expand_dims(self.hr_guider.astype(np.float32), 0), self.hr_guider_grid)
-            with tf.Session() as sess:
-                warped_guider = warped_guider_t.eval()[0]
+            # TODO: show both guider and warped guider?
+
+            # show warped guider
+            warped_guider_t = generic_transformer(np.expand_dims(self.hr_guider.astype(np.float32), 0), self.augmented_grid)
+            warped_guider = warped_guider_t.eval(session=tf.Session())[0]
             self.hr_guider_image_space.imshow(warped_guider, vmin=0.0, vmax=1.0, cmap=self.conf.cmap)
+
+            # print entire grid L1 norm
+            guider_grid = self.gi_grid.eval(session=self.sess)
+            print('Grid L1 norm:', np.abs(np.sum(np.abs(guider_grid)) - 77081.05)) # 77081.05 is the initial norm, we want the diff
+
         # These line are needed in order to see the graphics at real time
         self.fig.canvas.draw()
         plt.pause(0.01)

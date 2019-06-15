@@ -2,9 +2,6 @@ import numpy as np
 from stn.transformer import bilinear_sampler
 
 def generic_spatial_transformer_network(input_fmap, batch_grids):
-    # batch_grids = tf.Print(batch_grids, [batch_grids[0,:,65:70,65:70]],summarize=-1)
-
-
     x_s = batch_grids[:, 0, :, :]
     y_s = batch_grids[:, 1, :, :]
 

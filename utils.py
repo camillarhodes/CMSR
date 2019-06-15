@@ -1,6 +1,6 @@
 import numpy as np
 from math import pi, sin, cos
-from cv2 import warpPerspective, INTER_CUBIC, Canny
+from cv2 import Canny
 from imresize import imresize
 from shutil import copy
 from time import strftime, localtime
@@ -12,7 +12,6 @@ from scipy.io import loadmat
 
 def random_augment(ims,
                    guiding_ims=None,
-                   guiding_grids=None,
                    base_scales=None,
                    leave_as_is_probability=0.2,
                    no_interpolate_probability=0.3,
@@ -22,8 +21,13 @@ def random_augment(ims,
                    scale_diff_sigma=0.01,
                    shear_sigma=0.01,
                    crop_size=128):
-    # fix randomness
-    # np.random.seed(0)
+    """Takes a random crop of the image and the guiding image.
+    Returns:
+        1. the image chosen randomly from `ims` list
+        2. the guider image chosen randomly from `guiding_ims` list
+        3. the chosen augmentation
+        4. the augmentation (from 3) with additional downscaling to be used on the guider/grid
+    """
 
     # Determine which kind of augmentation takes place according to probabilities
     random_chooser = np.random.rand()
@@ -39,9 +43,6 @@ def random_augment(ims,
     # Option 3: Affine transformation (uses interpolation)
     else:
         mode = 'affine'
-
-    # TODO: remove this when supported
-    # mode = 'no_interp'
 
     # If scales not given, calculate them according to sizes of images. This would be suboptimal, because when scales
     # are not integers, different scales can have the same image shape.
@@ -63,13 +64,6 @@ def random_augment(ims,
                                  if np.min([base_scale]) > scale - 1.0e-6)
     im = ims[scale_ind]
 
-    # [GUY]
-    if guiding_ims:
-        guiding_im = guiding_ims[scale_ind]
-        guiding_grid = guiding_grids[scale_ind]
-        guider_to_im_ratio = np.divide(guiding_im.shape,im.shape)[:2]
-        guider_crop_size_y, guider_crop_size_x = guider_to_im_ratio * crop_size
-
     # Next are matrices whose multiplication will be the transformation. All are 3x3 matrices.
 
     # First matrix shifts image to center so that crop is in the center of the image
@@ -81,22 +75,10 @@ def random_augment(ims,
                                        [0, 1, im.shape[0] / 2.0],
                                        [0, 0, 1]])
 
-    if guiding_ims:
-        shift_to_center_mat_guider = np.array([[1, 0, - guiding_im.shape[1] / 2.0],
-                                               [0, 1, - guiding_im.shape[0] / 2.0],
-                                               [0, 0, 1]])
-
-        shift_back_from_center_guider = np.array([[1, 0, guiding_im.shape[1] / 2.0],
-                                                  [0, 1, guiding_im.shape[0] / 2.0],
-                                                  [0, 0, 1]])
-
     # Keeping the transform interpolation free means only shifting by integers
     if mode != 'affine':
         shift_to_center_mat = np.round(shift_to_center_mat)
         shift_back_from_center = np.round(shift_back_from_center)
-        if guiding_ims:
-            shift_to_center_mat_guider = np.round(shift_to_center_mat_guider)
-            shift_back_from_center_guider = np.round(shift_back_from_center_guider)
 
     # Scale matrix. if affine, first determine global scale by probability, then determine difference between x scale
     # and y scale by gaussian probability.
@@ -122,19 +104,10 @@ def random_augment(ims,
     shift_mat = np.array([[1, 0, - shift_x],
                           [0, 1, - shift_y],
                           [0, 0, 1]])
-    if guiding_ims:
-        shift_x_guider = np.random.rand() * np.clip(scale * guiding_im.shape[1] - guider_crop_size_x, 0, 9999)
-        shift_y_guider = np.random.rand() * np.clip(scale * guiding_im.shape[0] - guider_crop_size_y, 0, 9999)
-        shift_mat_guider = np.array([[1, 0, - shift_x_guider],
-                                     [0, 1, - shift_y_guider],
-                                     [0, 0, 1]])
-
 
     # Keeping the transform interpolation free means only shifting by integers
     if mode != 'affine':
         shift_mat = np.round(shift_mat)
-        if guiding_ims:
-            shift_mat_guider = np.round(shift_mat_guider)
 
     # Rotation matrix angle. if affine, set a random angle. if no_interp then theta can only be pi/2 times int.
     if mode == 'affine':
@@ -162,35 +135,33 @@ def random_augment(ims,
                           [0, 0, 1]])
 
     # Create the final transformation by multiplying all the transformations.
-    transform_mat = (shift_back_from_center
+    augmentation_mat = (shift_back_from_center
                      .dot(shift_mat)
                      .dot(shear_mat)
                      .dot(rotation_mat)
                      .dot(scale_mat)
                      .dot(shift_to_center_mat))
+
     if guiding_ims:
-        transform_mat_guider = (shift_back_from_center_guider
-                                .dot(shift_mat_guider)
-                                .dot(shear_mat)
-                                .dot(rotation_mat)
-                                .dot(scale_mat)
-                                .dot(shift_to_center_mat_guider))
+        guiding_im = guiding_ims[scale_ind]
+        guider_to_im_ratio = np.divide(guiding_im.shape, im.shape)[:2]
+
+        # first scale the guider/grid to the size of the image
+        scale_guider_mat = np.array([[1.0 / guider_to_im_ratio[0], 0, 0],
+                                     [0, 1.0 / guider_to_im_ratio[1], 0],
+                                     [0, 0, 1]])
+
+        # then perform the same augmentation
+        augmentation_mat_guider = augmentation_mat.dot(scale_guider_mat)
 
 
-    # Apply transformations
-    augmentation = lambda img: np.clip(warpPerspective(img, transform_mat, (crop_size, crop_size), flags=INTER_CUBIC), 0, 1)
-    augmentation_guider = lambda guiding_img: np.clip(warpPerspective(guiding_img, transform_mat_guider, (guider_crop_size_x, guider_crop_size_y), flags=INTER_CUBIC), 0, 1)
-    augmentation_grid = lambda grid: warpPerspective(grid, transform_mat_guider, (guider_crop_size_x, guider_crop_size_y), flags=INTER_CUBIC)
+    return im, guiding_im, flatten_transform(augmentation_mat), flatten_transform(augmentation_mat_guider)
 
-    augmented_im = augmentation(im)
-    augmented_guiding_im = augmentation_guider(guiding_im) if guiding_im is not None else None
 
-    # TODO: support num_batch > 1
-    augmented_guiding_grid = np.stack([augmentation_grid(guiding_grid[0][0]), augmentation_grid(guiding_grid[0][1])])
-    augmented_guiding_grid = np.expand_dims(augmented_guiding_grid, 0)
-
-    return augmented_im, guiding_im, augmented_guiding_grid
-    # return augmented_im, augmented_guiding_im, augmented_guiding_grid
+def flatten_transform(transformation_mat):
+        """This converts the augmentation matrix into the format of
+        tf.contrib.image.transform"""
+        return np.linalg.inv(transformation_mat).flatten()[:8]
 
 
 def back_projection(y_sr, y_lr, down_kernel, up_kernel, sf=None):
@@ -287,6 +258,3 @@ def auto_canny(image, sigma=0.33):
 
     # return the edged image
     return edged
-
-
-
