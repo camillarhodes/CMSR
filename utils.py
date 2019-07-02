@@ -1,6 +1,6 @@
 import numpy as np
 from math import pi, sin, cos
-from cv2 import warpPerspective, INTER_CUBIC, Canny
+from cv2 import Canny
 from imresize import imresize
 from shutil import copy
 from time import strftime, localtime
@@ -21,6 +21,13 @@ def random_augment(ims,
                    scale_diff_sigma=0.01,
                    shear_sigma=0.01,
                    crop_size=128):
+    """Takes a random crop of the image and the guiding image.
+    Returns:
+        1. the image chosen randomly from `ims` list
+        2. the guider image chosen randomly from `guiding_ims` list
+        3. the chosen augmentation
+        4. the augmentation (from 3) with additional downscaling to be used on the guider/grid
+    """
 
     # Determine which kind of augmentation takes place according to probabilities
     random_chooser = np.random.rand()
@@ -57,9 +64,6 @@ def random_augment(ims,
                                  if np.min([base_scale]) > scale - 1.0e-6)
     im = ims[scale_ind]
 
-    # [GUY]
-    guiding_im = guiding_ims[scale_ind] if guiding_ims else None
-
     # Next are matrices whose multiplication will be the transformation. All are 3x3 matrices.
 
     # First matrix shifts image to center so that crop is in the center of the image
@@ -70,6 +74,7 @@ def random_augment(ims,
     shift_back_from_center = np.array([[1, 0, im.shape[1] / 2.0],
                                        [0, 1, im.shape[0] / 2.0],
                                        [0, 0, 1]])
+
     # Keeping the transform interpolation free means only shifting by integers
     if mode != 'affine':
         shift_to_center_mat = np.round(shift_to_center_mat)
@@ -130,20 +135,33 @@ def random_augment(ims,
                           [0, 0, 1]])
 
     # Create the final transformation by multiplying all the transformations.
-    transform_mat = (shift_back_from_center
+    augmentation_mat = (shift_back_from_center
                      .dot(shift_mat)
                      .dot(shear_mat)
                      .dot(rotation_mat)
                      .dot(scale_mat)
                      .dot(shift_to_center_mat))
 
-    # Apply transformation to images and return the transformed image clipped between 0-1
-    augmentation = lambda img: np.clip(warpPerspective(img, transform_mat, (crop_size, crop_size), flags=INTER_CUBIC), 0, 1)
-    augmented_im = augmentation(im)
+    if guiding_ims:
+        guiding_im = guiding_ims[scale_ind]
+        guider_to_im_ratio = np.divide(guiding_im.shape, im.shape)[:2]
 
-    # [GUY] also augment the guiding im if necessary
-    augmented_guiding_im = augmentation(guiding_im) if guiding_im is not None else None
-    return augmented_im, augmented_guiding_im
+        # first scale the guider/grid to the size of the image
+        scale_guider_mat = np.array([[1.0 / guider_to_im_ratio[0], 0, 0],
+                                     [0, 1.0 / guider_to_im_ratio[1], 0],
+                                     [0, 0, 1]])
+
+        # then perform the same augmentation
+        augmentation_mat_guider = augmentation_mat.dot(scale_guider_mat)
+
+
+    return im, guiding_im, flatten_transform(augmentation_mat), flatten_transform(augmentation_mat_guider)
+
+
+def flatten_transform(transformation_mat):
+        """This converts the augmentation matrix into the format of
+        tf.contrib.image.transform"""
+        return np.linalg.inv(transformation_mat).flatten()[:8]
 
 
 def back_projection(y_sr, y_lr, down_kernel, up_kernel, sf=None):
@@ -240,4 +258,3 @@ def auto_canny(image, sigma=0.33):
 
     # return the edged image
     return edged
-

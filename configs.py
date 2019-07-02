@@ -40,7 +40,7 @@ class Config:
     # params related to test and display
     run_test = True
     run_test_every = 50
-    display_every = 20
+    display_every = 5
     name = 'test'
     plot_losses = False
     result_path = os.path.dirname(__file__) + '/results'
@@ -79,12 +79,17 @@ X2_ONE_JUMP_IDEAL_CONF.input_path = os.path.dirname(__file__) + '/set14'
 # [GUY]
 THERMAL_IMAGES_CONF = Config(input_filter_depth=6)
 THERMAL_IMAGES_CONF.plot_losses = True
-THERMAL_IMAGES_CONF.run_test_every = 20
-THERMAL_IMAGES_CONF.input_path = os.path.dirname(__file__) + '/Flip_aligned_2'
+THERMAL_IMAGES_CONF.crop_size = 96
+# THERMAL_IMAGES_CONF.run_test_every = 5
+THERMAL_IMAGES_CONF.display_every = 1
+THERMAL_IMAGES_CONF.input_path = os.path.dirname(__file__) + '/ULB17-VT-rotated'
+# THERMAL_IMAGES_CONF.input_path = os.path.dirname(__file__) + '/ULB17-VT'
 THERMAL_IMAGES_CONF.img_ext = 'png'
 THERMAL_IMAGES_CONF.guiding_img_ext = 'png'
-THERMAL_IMAGES_CONF.max_iters = 600
-THERMAL_IMAGES_CONF.scale_factors = [[2.0, 2.0]] # enhance only
+# THERMAL_IMAGES_CONF.max_iters = 600
+THERMAL_IMAGES_CONF.scale_factors = [[4.0, 4.0]]
+# THERMAL_IMAGES_CONF.scale_factors = [[1.0, 1.5], [1.5, 1.0], [1.5, 1.5], [1.5, 2.0], [2.0, 1.5], [2.0, 2.0]]
+# THERMAL_IMAGES_CONF.back_projection_iters = [6, 6, 8, 10, 10, 12]
 # THERMAL_IMAGES_CONF.noise_std = 0.05  # adding noise to lr-sons. small for real images, bigger for noisy images and zero for ideal case
 
 # [GUY]
