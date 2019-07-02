@@ -274,7 +274,7 @@ class ZSSR:
             # Apply adam optimizer
             optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate_t)
             self.train_op = optimizer.minimize(self.loss_t, var_list=list(set(tf.trainable_variables()) - {self.gi_grid}))
-            grid_optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate_t / 100)
+            grid_optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate_t / 50)
             self.train_grid_op = grid_optimizer.minimize(self.loss_t, var_list=[self.gi_grid])
             self.init_op = tf.initialize_all_variables()
 
