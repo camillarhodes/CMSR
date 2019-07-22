@@ -144,7 +144,7 @@ def random_augment(ims,
 
     if guiding_ims:
         guiding_im = guiding_ims[scale_ind]
-        guider_to_im_ratio = np.divide(guiding_im.shape, im.shape)[:2]
+        guider_to_im_ratio = np.true_divide(guiding_im.shape, im.shape)[:2]
 
         # first scale the guider/grid to the size of the image
         scale_guider_mat = np.array([[1.0 / guider_to_im_ratio[0], 0, 0],
@@ -155,7 +155,9 @@ def random_augment(ims,
         augmentation_mat_guider = augmentation_mat.dot(scale_guider_mat)
 
 
-    return im, guiding_im, flatten_transform(augmentation_mat), flatten_transform(augmentation_mat_guider)
+        return im, guiding_im, flatten_transform(augmentation_mat), flatten_transform(augmentation_mat_guider)
+
+    return im, None, flatten_transform(augmentation_mat), None
 
 
 def flatten_transform(transformation_mat):
@@ -232,16 +234,29 @@ def prepare_result_dir(conf):
 def add_n_channels_dim(*images):
     # Adds a n_channels dim if needed
     def _expander(img):
-        if len(img.shape) < 3:
+        if img is not None and len(img.shape) < 3:
             img = np.expand_dims(img,-1)
         return img
 
     return tuple(map(_expander, images))
 
 
+def remove_n_channels_dim(*images):
+    # Adds a n_channels dim if needed
+    def _remover(img):
+        if img is not None and len(img.shape) == 3 and img.shape[2] == 1:
+            img = img[:,:,0]
+        return img
+
+    return tuple(map(_remover, images))
+
+
 def normalize_images(*images):
     def _normalize(img):
         return (img.astype(float) / np.max(img))[:,:,:3] if img is not None else None
+
+    # first add n_channels_dim
+    images = add_n_channels_dim(*images)
 
     return tuple(map(_normalize, images))
 
