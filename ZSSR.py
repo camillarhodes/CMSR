@@ -44,6 +44,8 @@ class ZSSR:
     interp_mse = []
     mse_steps = []
     loss = []
+    loss_rec = []
+    loss_grid = []
     learning_rate_change_iter_nums = []
     fig = None
 
@@ -58,6 +60,8 @@ class ZSSR:
     layers_t = None
     net_output_t = None
     loss_t = None
+    loss_rec_t = None
+    loss_grid_t = None
     train_op = None
     train_grid_op = None
     init_op = None
@@ -253,7 +257,6 @@ class ZSSR:
                     [1, 1, 1, 1], "SAME", name='layer_%d' % (l + 1)
                 )
 
-                grid_optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate_t / 200)
 
 
             # Define first layer
@@ -282,14 +285,28 @@ class ZSSR:
             # Output image (Add last conv layer result to input, residual learning with global skip connection)
             self.net_output_t = self.layers_t[-1] +  self.conf.learn_residual * self.lr_son_t
 
+
             if self.gi is not None:
                 self.net_output_t += self.layers_t_guider[-1]
 
             # Final loss (L1 loss between label and output layer)
-            self.loss_t = tf.reduce_mean(tf.reshape(tf.abs(self.net_output_t - self.hr_father_t), [-1]))
+            self.loss_rec_t = tf.reduce_mean(tf.reshape(tf.abs(self.net_output_t - self.hr_father_t), [-1]))
+            self.loss_t = self.loss_rec_t
+
+            if self.gi is not None:
+                # calculate gradients
+                dy = self.hr_guider_t[:, 1:, :, :] - self.hr_guider_t[:, :-1, :, :]
+                dx = self.hr_guider_t[:, :, 1:, :] - self.hr_guider_t[:, :, :-1, :]
+
+                # define grid loss to be their norm
+                self.loss_grid_t = tf.norm(dx)**2 + tf.norm(dy)**2 # ^2 ?
+
+                # add the grid loss to global loss
+                self.loss_t += self.conf.grid_reg_coef * self.loss_grid_t
 
             # Apply adam optimizer
             optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate_t)
+            grid_optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate_t / 50)
             self.train_op = optimizer.minimize(self.loss_t, var_list=list(set(tf.trainable_variables()) - {self.gi_grid}))
 
             if self.gi is not None:
@@ -313,6 +330,8 @@ class ZSSR:
 
         # Initialize all counters etc
         self.loss = [None] * self.conf.max_iters
+        self.loss_rec = [None] * self.conf.max_iters
+        self.loss_grid = [None] * self.conf.max_iters
         self.mse, self.mse_rec, self.psnr_rec, self.interp_mse, self.interp_rec_mse, self.mse_steps = [], [], [], [], [], []
         self.iter = 0
         self.learning_rate = self.conf.learning_rate
@@ -354,9 +373,9 @@ class ZSSR:
                 'augmentation_mat_grid:0': augmentation_mat_grid,
                 'augmentation_output_shape:0': interpolated_lr_son.shape[:2]
             }
-            _1, _2, self.loss[self.iter], train_output, self.augmented_grid = \
+            _1, _2, self.loss[self.iter], self.loss_rec[self.iter], self.loss_grid[self.iter], train_output, self.augmented_grid = \
                 self.sess.run(
-                    [self.train_grid_op, self.train_op, self.loss_t, self.net_output_t, self.augmented_grid_t], feed_dict
+                    [self.train_grid_op, self.train_op, self.loss_t, self.loss_rec_t, self.loss_grid_t, self.net_output_t, self.augmented_grid_t], feed_dict
                 )
 
         else:
@@ -508,7 +527,12 @@ class ZSSR:
 
             # Display info and save weights
             if not self.iter % self.conf.display_every:
-                print('sf:', self.sf*self.base_sf, ', iteration: ', self.iter, ', loss: ', self.loss[self.iter])
+                print(
+                    'sf:', self.sf*self.base_sf, ', iteration: ', self.iter,
+                    ', loss: ', self.loss[self.iter],
+                    ', loss_rec: ', self.loss_rec[self.iter],
+                    ', loss_grid: ', self.loss_grid[self.iter]
+                )
 
             # Test network
             if self.conf.run_test and (not self.iter % self.conf.run_test_every):
