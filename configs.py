@@ -52,7 +52,7 @@ class Config:
     cmap = None
     img_ext = 'png'
     guiding_img_ext = 'png'
-    grid_reg_coef = 0.1
+    grid_reg_coef = 0.0001
 
     def __init__(self, input_filter_depth=3, output_filter_depth=3,
                  guider_filter_depth=3,
