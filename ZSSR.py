@@ -301,7 +301,7 @@ class ZSSR:
                 dy = self.gi_grid[:, 1,  1:, :] - self.gi_grid[:, 1, :-1, :]
 
                 # define grid loss to be their norm
-                self.loss_grid_t = tf.norm(dx)**2 + tf.norm(dy)**2 # ^2 ?
+                self.loss_grid_t = tf.norm(dx, ord=1) + tf.norm(dy, ord=1)
 
                 # add the grid loss to global loss
                 self.loss_t += self.conf.grid_reg_coef * self.loss_grid_t
