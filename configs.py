@@ -25,6 +25,7 @@ class Config:
 
     # Params concerning learning rate policy
     learning_rate = 0.001
+    learning_rate_grid = 0.00001
     learning_rate_change_ratio = 1.5  # ratio between STD and slope of linear fit, under which lr is reduced
     learning_rate_policy_check_every = 60
     learning_rate_slope_range = 256
