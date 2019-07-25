@@ -300,8 +300,8 @@ class ZSSR:
                 # calculate gradients
                 # dy = self.hr_guider_t[:, 1:, :, :] - self.hr_guider_t[:, :-1, :, :]
                 # dx = self.hr_guider_t[:, :, 1:, :] - self.hr_guider_t[:, :, :-1, :]
-                # dx = self.gi_grid[:, 0, :, 1:] - self.gi_grid[:, 0, :, :-1]
-                # dy = self.gi_grid[:, 1,  1:, :] - self.gi_grid[:, 1, :-1, :]
+                dx = self.gi_grid[:, 0, :, 1:] - self.gi_grid[:, 0, :, :-1]
+                dy = self.gi_grid[:, 1,  1:, :] - self.gi_grid[:, 1, :-1, :]
 
                 # define grid loss to be their norm
                 self.loss_grid_t = tf.square((tf.norm(dx, ord=1) + tf.norm(dy, ord=1))-self.initial_norm)
