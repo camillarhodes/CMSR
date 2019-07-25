@@ -212,7 +212,6 @@ class ZSSR:
                 self.gi_grid = tf.Variable(initial_value=generic_grid_generator(H, W, B))
                 if self.initial_grid is None:
                     self.initial_grid = tf.Variable(self.gi_grid)
-                    self.initial_norm = tf.norm(self.initial_dx, ord=1) + tf.norm(self.initial_dy, ord=1)
 
 
                 # Transform matrix for augmenting the grid
