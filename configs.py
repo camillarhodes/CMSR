@@ -52,7 +52,8 @@ class Config:
     cmap = None
     img_ext = 'png'
     guiding_img_ext = 'png'
-    grid_reg_coef = 0.0001
+    # grid_reg_coef = 0.00001
+    grid_reg_coef = 0
 
     def __init__(self, input_filter_depth=3, output_filter_depth=3,
                  guider_filter_depth=3,
@@ -63,9 +64,9 @@ class Config:
         self.filter_shape = ([[3, 3, input_filter_depth, self.width]] +
                              [[3, 3, self.width, self.width]] * (self.depth-2) +
                              [[3, 3, self.width, output_filter_depth]])
-        self.filter_shape_guider = ([[3, 3, guider_filter_depth, self.width]] +
-                             [[3, 3, self.width, self.width]] * (self.depth-2) +
-                             [[3, 3, self.width, output_filter_depth]])
+        # self.filter_shape_guider = ([[3, 3, guider_filter_depth, self.width]] +
+        #                      [[3, 3, self.width, self.width]] * (self.depth-2) +
+        #                      [[3, 3, self.width, output_filter_depth]])
 
 
 ########################################
@@ -99,7 +100,7 @@ THERMAL_IMAGES_CONF.scale_factors = [[5.0, 5.0]]
 # [GUY]
 DEPTH_MAPS_CONF = Config(input_filter_depth=4,
                          output_filter_depth=1)
-DEPTH_MAPS_CONF.input_path = os.path.dirname(__file__) + '/vase'
+DEPTH_MAPS_CONF.input_path = os.path.dirname(__file__) + '/Art_misaligned/try1/'
 DEPTH_MAPS_CONF.img_ext = 'png'
 DEPTH_MAPS_CONF.guiding_img_ext = 'png'
 DEPTH_MAPS_CONF.cmap = 'gray'
@@ -111,7 +112,7 @@ DEPTH_MAPS_CONF.scale_factors = [[4.0, 4.0]]  # list of pairs (vertical, horizon
 DEPTH_MAPS_CONF.run_test_every = 20
 DEPTH_MAPS_CONF.display_every = 1
 DEPTH_MAPS_CONF.plot_losses = True
-DEPTH_MAPS_CONF.crop_size = 96
+DEPTH_MAPS_CONF.crop_size = 64
 
 # Same as above but with visualization (Recommended for one image, interactive mode, for debugging)
 X2_IDEAL_WITH_PLOT_CONF = Config()

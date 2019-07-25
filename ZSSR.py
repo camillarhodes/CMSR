@@ -208,8 +208,14 @@ class ZSSR:
 
             # Guider grid, for learning to warp the guider image
             if self.gi is not None:
-                B, H, W, C = (1, self.gi.shape[0], self.gi.shape[1], self.conf.filter_shape_guider[0][2])
+                B, H, W, C = (1, self.gi.shape[0], self.gi.shape[1], 3)
                 self.gi_grid = tf.Variable(initial_value=generic_grid_generator(H, W, B))
+                if self.initial_grid is None:
+                    self.initial_grid = tf.Variable(self.gi_grid)
+                    self.initial_dx = self.initial_grid[:, 0, :, 1:] - self.initial_grid[:, 0, :, :-1]
+                    self.initial_dy = self.initial_grid[:, 1,  1:, :] - self.initial_grid[:, 1, :-1, :]
+                    self.initial_norm = tf.norm(self.initial_dx, ord=1) + tf.norm(self.initial_dy, ord=1)
+
 
                 # Transform matrix for augmenting the grid
                 self.augmentation_mat_grid = tf.placeholder(tf.float32, name='augmentation_mat_grid')
@@ -236,26 +242,26 @@ class ZSSR:
 
                 self.hr_guider_t = tf.cond(should_warp_guider, get_warped_guider, get_original_guider)
 
-                self.filters_t_guider = [tf.get_variable(shape=meta.filter_shape_guider[ind], name='filter_guider_%d' % ind,
-                                                         initializer=tf.zeros_initializer())
-                                         for ind in range(meta.depth)]
+                # self.filters_t_guider = [tf.get_variable(shape=meta.filter_shape_guider[ind], name='filter_guider_%d' % ind,
+                #                                          initializer=tf.zeros_initializer())
+                #                          for ind in range(meta.depth)]
 
                 # Define merging layer for the guider image if needed
                 concat_layer = tf.concat(
                     [self.lr_son_t, self.hr_guider_t], 3, name ='concat_layer'
                 )
 
-                self.layers_t_guider = [self.hr_guider_t] + [None] * meta.depth
+                # self.layers_t_guider = [self.hr_guider_t] + [None] * meta.depth
 
-                for l in range(meta.depth - 1):
-                    self.layers_t_guider[l + 1] = tf.nn.relu(tf.nn.conv2d(self.layers_t_guider[l], self.filters_t_guider[l],
-                        [1, 1, 1, 1], "SAME", name='layer_%d' % (l + 1)
-                    ))
+                # for l in range(meta.depth - 1):
+                #     self.layers_t_guider[l + 1] = tf.nn.relu(tf.nn.conv2d(self.layers_t_guider[l], self.filters_t_guider[l],
+                #         [1, 1, 1, 1], "SAME", name='layer_%d' % (l + 1)
+                #     ))
 
-                l = meta.depth - 1
-                self.layers_t_guider[-1] = tf.nn.conv2d(self.layers_t_guider[l], self.filters_t_guider[l],
-                    [1, 1, 1, 1], "SAME", name='layer_%d' % (l + 1)
-                )
+                # l = meta.depth - 1
+                # self.layers_t_guider[-1] = tf.nn.conv2d(self.layers_t_guider[l], self.filters_t_guider[l],
+                #     [1, 1, 1, 1], "SAME", name='layer_%d' % (l + 1)
+                # )
 
 
 
@@ -286,8 +292,8 @@ class ZSSR:
             self.net_output_t = self.layers_t[-1] +  self.conf.learn_residual * self.lr_son_t
 
 
-            if self.gi is not None:
-                self.net_output_t += self.layers_t_guider[-1]
+            # if self.gi is not None:
+            #     self.net_output_t += self.layers_t_guider[-1]
 
             # Final loss (L1 loss between label and output layer)
             self.loss_rec_t = tf.reduce_mean(tf.reshape(tf.abs(self.net_output_t - self.hr_father_t), [-1]))
@@ -301,14 +307,14 @@ class ZSSR:
                 dy = self.gi_grid[:, 1,  1:, :] - self.gi_grid[:, 1, :-1, :]
 
                 # define grid loss to be their norm
-                self.loss_grid_t = tf.norm(dx, ord=1) + tf.norm(dy, ord=1)
+                self.loss_grid_t = tf.square((tf.norm(dx, ord=1) + tf.norm(dy, ord=1))-self.initial_norm)
 
                 # add the grid loss to global loss
                 self.loss_t += self.conf.grid_reg_coef * self.loss_grid_t
 
             # Apply adam optimizer
             optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate_t)
-            grid_optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate_t / 50)
+            grid_optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate_t / 100)
             self.train_op = optimizer.minimize(self.loss_t, var_list=list(set(tf.trainable_variables()) - {self.gi_grid}))
 
             if self.gi is not None:
@@ -375,9 +381,9 @@ class ZSSR:
                 'augmentation_mat_grid:0': augmentation_mat_grid,
                 'augmentation_output_shape:0': interpolated_lr_son.shape[:2]
             }
-            _1, _2, self.loss[self.iter], self.loss_rec[self.iter], self.loss_grid[self.iter], train_output, self.augmented_grid = \
+            _1, _2, self.loss[self.iter], self.loss_rec[self.iter], self.loss_grid[self.iter], train_output, self.augmented_grid, layers = \
                 self.sess.run(
-                    [self.train_grid_op, self.train_op, self.loss_t, self.loss_rec_t, self.loss_grid_t, self.net_output_t, self.augmented_grid_t], feed_dict
+                    [self.train_grid_op, self.train_op, self.loss_t, self.loss_rec_t, self.loss_grid_t, self.net_output_t, self.augmented_grid_t, self.layers_t], feed_dict
                 )
 
         else:
@@ -710,10 +716,9 @@ class ZSSR:
 
             # print entire grid L1 norm
             guider_grid = self.gi_grid.eval(session=self.sess)
-            if self.initial_grid is None:
-                self.initial_grid = guider_grid
+            initial_grid = self.initial_grid.eval(session=self.sess)
 
-            print('Grid L1 norm diff:', np.sum(np.abs(guider_grid - self.initial_grid)))
+            print('Grid L1 norm diff:', np.sum(np.abs(guider_grid - initial_grid)))
 
         # These line are needed in order to see the graphics at real time
         self.fig.canvas.draw()
