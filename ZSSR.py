@@ -212,8 +212,6 @@ class ZSSR:
                 self.gi_grid = tf.Variable(initial_value=generic_grid_generator(H, W, B))
                 if self.initial_grid is None:
                     self.initial_grid = tf.Variable(self.gi_grid)
-                    self.initial_dx = self.initial_grid[:, 0, :, 1:] - self.initial_grid[:, 0, :, :-1]
-                    self.initial_dy = self.initial_grid[:, 1,  1:, :] - self.initial_grid[:, 1, :-1, :]
                     self.initial_norm = tf.norm(self.initial_dx, ord=1) + tf.norm(self.initial_dy, ord=1)
 
 
@@ -303,14 +301,15 @@ class ZSSR:
                 # calculate gradients
                 # dy = self.hr_guider_t[:, 1:, :, :] - self.hr_guider_t[:, :-1, :, :]
                 # dx = self.hr_guider_t[:, :, 1:, :] - self.hr_guider_t[:, :, :-1, :]
-                dx = self.gi_grid[:, 0, :, 1:] - self.gi_grid[:, 0, :, :-1]
-                dy = self.gi_grid[:, 1,  1:, :] - self.gi_grid[:, 1, :-1, :]
+                # dx = self.gi_grid[:, 0, :, 1:] - self.gi_grid[:, 0, :, :-1]
+                # dy = self.gi_grid[:, 1,  1:, :] - self.gi_grid[:, 1, :-1, :]
 
                 # define grid loss to be their norm
-                self.loss_grid_t = tf.square((tf.norm(dx, ord=1) + tf.norm(dy, ord=1))-self.initial_norm)
+                # self.loss_grid_t = tf.square((tf.norm(dx, ord=1) + tf.norm(dy, ord=1))-self.initial_norm)
+                self.loss_grid_t = 0
 
                 # add the grid loss to global loss
-                self.loss_t += self.conf.grid_reg_coef * self.loss_grid_t
+                # self.loss_t += self.conf.grid_reg_coef * self.loss_grid_t
 
             # Apply adam optimizer
             optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate_t)
@@ -381,9 +380,9 @@ class ZSSR:
                 'augmentation_mat_grid:0': augmentation_mat_grid,
                 'augmentation_output_shape:0': interpolated_lr_son.shape[:2]
             }
-            _1, _2, self.loss[self.iter], self.loss_rec[self.iter], self.loss_grid[self.iter], train_output, self.augmented_grid, layers = \
+            _1, _2, self.loss[self.iter], self.loss_rec[self.iter], self.loss_grid[self.iter], train_output, self.augmented_grid = \
                 self.sess.run(
-                    [self.train_grid_op, self.train_op, self.loss_t, self.loss_rec_t, self.loss_grid_t, self.net_output_t, self.augmented_grid_t, self.layers_t], feed_dict
+                    [self.train_grid_op, self.train_op, self.loss_t, self.loss_rec_t, self.loss_grid_t, self.net_output_t, self.augmented_grid_t], feed_dict
                 )
 
         else:
