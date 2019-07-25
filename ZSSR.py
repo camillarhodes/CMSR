@@ -51,6 +51,7 @@ class ZSSR:
 
     # Network tensors (all tensors end with _t to distinguish)
     learning_rate_t = None
+    learning_rate_grid_t = None
     lr_son_t = None
     hr_father_t = None
     hr_guider_t = None
@@ -195,6 +196,9 @@ class ZSSR:
             # Learning rate tensor
             self.learning_rate_t = tf.placeholder(tf.float32, name='learning_rate')
 
+            if self.gi is not None:
+                self.learning_rate_grid_t = tf.placeholder(tf.float32, name='learning_rate_grid')
+
             # Input image
             self.lr_son_t = tf.placeholder(tf.float32, name='lr_son')
 
@@ -311,7 +315,7 @@ class ZSSR:
 
             # Apply adam optimizer
             optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate_t)
-            grid_optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate_grid)
+            grid_optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate_grid_t)
             self.train_op = optimizer.minimize(self.loss_t, var_list=list(set(tf.trainable_variables()) - {self.gi_grid}))
 
             if self.gi is not None:
@@ -340,6 +344,7 @@ class ZSSR:
         self.mse, self.mse_rec, self.psnr_rec, self.interp_mse, self.interp_rec_mse, self.mse_steps = [], [], [], [], [], []
         self.iter = 0
         self.learning_rate = self.conf.learning_rate
+        self.learning_rate_grid = self.conf.learning_rate_grid
         self.learning_rate_change_iter_nums = [0]
 
         # Downscale ground-truth to the intermediate sf size (for gradual SR).
@@ -372,6 +377,7 @@ class ZSSR:
         if hr_guider is not None:
             feed_dict = {
                 'learning_rate:0': self.learning_rate,
+                'learning_rate_grid:0': self.learning_rate_grid,
                 'lr_son:0': np.expand_dims(interpolated_lr_son, 0),
                 'hr_father:0': np.expand_dims(hr_father, 0),
                 'hr_guider:0': np.expand_dims(hr_guider, 0),
