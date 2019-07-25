@@ -452,7 +452,7 @@ class ZSSR:
             # Determine learning rate maintaining or reduction by the ration between slope and noise
             if -self.conf.learning_rate_change_ratio * slope < std:
                 self.learning_rate /= 10
-                self.learning_rate_grid *= 10
+                self.learning_rate_grid /= 10
                 print("learning rate updated: ", self.learning_rate)
 
                 # Keep track of learning rate changes for plotting purposes
