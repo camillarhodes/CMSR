@@ -56,6 +56,7 @@ class ZSSR:
     hr_father_t = None
     hr_guider_t = None
     gi_grid = None
+    gi_grid_inverse = None
     initial_grid = None
     filters_t = None
     layers_t = None
@@ -214,6 +215,7 @@ class ZSSR:
             if self.gi is not None:
                 B, H, W, C = (1, self.gi.shape[0], self.gi.shape[1], 3)
                 self.gi_grid = tf.Variable(initial_value=generic_grid_generator(H, W, B))
+                self.gi_grid_inverse = tf.Variable(initial_value=generic_grid_generator(H, W, B))
                 if self.initial_grid is None:
                     self.initial_grid = tf.Variable(self.gi_grid)
 
@@ -232,6 +234,9 @@ class ZSSR:
                 augmented_grid_t = tf.stack([augmented_grid_x, augmented_grid_y])
                 self.augmented_grid_t = tf.expand_dims(augmented_grid_t, 0)
 
+
+
+
                 should_warp_guider = tf.placeholder_with_default(True, shape=(), name='should_warp_guider')
 
                 def get_warped_guider():
@@ -242,6 +247,12 @@ class ZSSR:
                     return self.hr_guider_t
 
                 self.hr_guider_t = tf.cond(should_warp_guider, get_warped_guider, get_original_guider)
+
+                warped_gi = generic_transformer(
+                        np.expand_dims(self.gi.astype(np.float32), 0), self.gi_grid
+                    )
+
+                warped_gi_inverse = generic_transformer(warped_gi, self.gi_grid_inverse)
 
                 # self.filters_t_guider = [tf.get_variable(shape=meta.filter_shape_guider[ind], name='filter_guider_%d' % ind,
                 #                                          initializer=tf.zeros_initializer())
@@ -308,18 +319,18 @@ class ZSSR:
                 dy = self.gi_grid[:, 1,  1:, :] - self.gi_grid[:, 1, :-1, :]
 
                 # define grid loss to be their norm
-                self.loss_grid_t = tf.square((tf.norm(dx, ord=1) + tf.norm(dy, ord=1)))
-
+                # self.loss_grid_t = tf.square((tf.norm(dx, ord=1) + tf.norm(dy, ord=1)))
+                self.loss_grid_t = tf.norm(warped_gi - warped_gi_inverse, ord=1)
                 # add the grid loss to global loss
-                # self.loss_t += self.conf.grid_reg_coef * self.loss_grid_t
+                self.loss_t += self.conf.grid_reg_coef * self.loss_grid_t
 
             # Apply adam optimizer
             optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate_t)
             grid_optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate_grid_t)
-            self.train_op = optimizer.minimize(self.loss_t, var_list=list(set(tf.trainable_variables()) - {self.gi_grid}))
+            self.train_op = optimizer.minimize(self.loss_t, var_list=list(set(tf.trainable_variables()) - {self.gi_grid, self.gi_grid_inverse}))
 
             if self.gi is not None:
-                self.train_grid_op = grid_optimizer.minimize(self.loss_t, var_list=[self.gi_grid])
+                self.train_grid_op = grid_optimizer.minimize(self.loss_t, var_list=[self.gi_grid, self.gi_grid_inverse])
 
             self.init_op = tf.initialize_all_variables()
 
