@@ -53,7 +53,8 @@ class Config:
     cmap = None
     img_ext = 'png'
     guiding_img_ext = 'png'
-    grid_reg_coef = 0.00001
+    # grid_reg_coef = 0.00001
+    grid_reg_coef = 0
 
     def __init__(self, input_filter_depth=3, output_filter_depth=3,
                  guider_filter_depth=3,
@@ -100,7 +101,7 @@ THERMAL_IMAGES_CONF.scale_factors = [[5.0, 5.0]]
 # [GUY]
 DEPTH_MAPS_CONF = Config(input_filter_depth=4,
                          output_filter_depth=1)
-DEPTH_MAPS_CONF.input_path = os.path.dirname(__file__) + '/Art_misaligned/try1/'
+DEPTH_MAPS_CONF.input_path = os.path.dirname(__file__) + '/Art_tries/try_aligned'
 DEPTH_MAPS_CONF.img_ext = 'png'
 DEPTH_MAPS_CONF.guiding_img_ext = 'png'
 DEPTH_MAPS_CONF.cmap = 'gray'
