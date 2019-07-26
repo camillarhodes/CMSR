@@ -320,7 +320,7 @@ class ZSSR:
 
                 # define grid loss to be their norm
                 # self.loss_grid_t = tf.square((tf.norm(dx, ord=1) + tf.norm(dy, ord=1)))
-                self.loss_grid_t = tf.norm(warped_gi - warped_gi_inverse, ord=1)
+                self.loss_grid_t = tf.norm(self.gi - warped_gi_inverse, ord=1)
                 # add the grid loss to global loss
                 self.loss_t += self.conf.grid_reg_coef * self.loss_grid_t
 
