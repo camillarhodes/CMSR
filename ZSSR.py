@@ -46,7 +46,8 @@ class ZSSR:
     mse_steps = []
     loss = []
     loss_rec = []
-    loss_grid = []
+    loss_grid_bad_order = []
+    loss_grid_inverse = []
     learning_rate_change_iter_nums = []
     fig = None
 
@@ -64,7 +65,8 @@ class ZSSR:
     net_output_t = None
     loss_t = None
     loss_rec_t = None
-    loss_grid_t = None
+    loss_grid_bad_order_t = None
+    loss_grid_inverse_t = None
     train_op = None
     train_grid_op = None
     init_op = None
@@ -149,7 +151,7 @@ class ZSSR:
                               self.sf is not None)
                               # self.sf is not None and
                               # np.any(np.abs(self.sf - self.conf.scale_factors[-1]) > 0.01))
-                          else self.gi_orig)
+                          else self.gi)
 
 
             # Build network computational graph
@@ -323,17 +325,16 @@ class ZSSR:
             self.loss_t = self.loss_rec_t
 
             if self.gi is not None:
-                # calculate gradients
-                # dy = self.hr_guider_t[:, 1:, :, :] - self.hr_guider_t[:, :-1, :, :]
-                # dx = self.hr_guider_t[:, :, 1:, :] - self.hr_guider_t[:, :, :-1, :]
-                dx = self.gi_grid[:, 0, :, 1:] - self.gi_grid[:, 0, :, :-1]
-                dy = self.gi_grid[:, 1,  1:, :] - self.gi_grid[:, 1, :-1, :]
+                bad_order_x = tf.reduce_sum(tf.cast(self.gi_grid[:, 0, :, :-1] > self.gi_grid[:, 0, :, 1:], tf.float32))
+                bad_order_y = tf.reduce_sum(tf.cast(self.gi_grid[:, 1, :-1, :] > self.gi_grid[:, 1, 1:, :], tf.float32))
 
-                # define grid loss to be their norm
-                # self.loss_grid_t = tf.square((tf.norm(dx, ord=1) + tf.norm(dy, ord=1)))
-                self.loss_grid_t = tf.norm(self.gi_per_sf - warped_gi_inverse, ord=1)
+                self.loss_grid_bad_order_t = (bad_order_x + bad_order_y)/(H*W*2)
+
+                self.loss_grid_inverse_t = tf.norm(self.gi_per_sf - warped_gi_inverse, ord=1)/(H*W)
+
                 # add the grid loss to global loss
-                self.loss_t += self.conf.grid_reg_coef * self.loss_grid_t
+                self.loss_t += self.conf.grid_coef_bad_order * self.loss_grid_bad_order_t + \
+                    self.conf.grid_coef_inverse * self.loss_grid_inverse_t
 
             # Apply adam optimizer
             optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate_t)
@@ -362,7 +363,8 @@ class ZSSR:
         # Initialize all counters etc
         self.loss = [None] * self.conf.max_iters
         self.loss_rec = [None] * self.conf.max_iters
-        self.loss_grid = [None] * self.conf.max_iters
+        self.loss_grid_bad_order = [None] * self.conf.max_iters
+        self.loss_grid_inverse = [None] * self.conf.max_iters
         self.mse, self.mse_rec, self.psnr_rec, self.interp_mse, self.interp_rec_mse, self.mse_steps = [], [], [], [], [], []
         self.iter = 0
         self.learning_rate = self.conf.learning_rate
@@ -406,11 +408,9 @@ class ZSSR:
                 'augmentation_mat_grid:0': augmentation_mat_grid,
                 'augmentation_output_shape:0': interpolated_lr_son.shape[:2]
             }
-            # _1, _2, self.loss[self.iter], self.loss_rec[self.iter], self.loss_grid[self.iter], train_output, self.augmented_grid = \
-            _1, self.loss[self.iter], self.loss_rec[self.iter], self.loss_grid[self.iter], train_output, self.augmented_grid = \
+            _1, _2, self.loss[self.iter], self.loss_rec[self.iter], self.loss_grid_bad_order[self.iter], self.loss_grid_inverse[self.iter], train_output, self.augmented_grid = \
                 self.sess.run(
-                    # [self.train_grid_op, self.train_op, self.loss_t, self.loss_rec_t, self.loss_grid_t, self.net_output_t, self.augmented_grid_t], feed_dict
-                    [self.train_op, self.loss_t, self.loss_rec_t, self.loss_grid_t, self.net_output_t, self.augmented_grid_t], feed_dict
+                    [self.train_grid_op, self.train_op, self.loss_t, self.loss_rec_t, self.loss_grid_bad_order_t, self.loss_grid_inverse_t, self.net_output_t, self.augmented_grid_t], feed_dict
                 )
 
         else:
@@ -559,10 +559,9 @@ class ZSSR:
 
             self.hr_guider = chosen_guider
 
-            for i in range(2):
 
-                # run network forward and back propagation, one iteration (This is the heart of the training)
-                self.train_output = self.forward_backward_pass(self.lr_son, self.hr_father, self.hr_guider, chosen_augmentation_grid)
+            # run network forward and back propagation, one iteration (This is the heart of the training)
+            self.train_output = self.forward_backward_pass(self.lr_son, self.hr_father, self.hr_guider, chosen_augmentation_grid)
 
             # Display info and save weights
             if not self.iter % self.conf.display_every:
@@ -570,7 +569,8 @@ class ZSSR:
                     'sf:', self.sf*self.base_sf, ', iteration: ', self.iter,
                     ', loss: ', self.loss[self.iter],
                     ', loss_rec: ', self.loss_rec[self.iter],
-                    ', loss_grid: ', self.loss_grid[self.iter]
+                    ', loss_grid_bad_order: ', self.loss_grid_bad_order[self.iter],
+                    ', loss_grid_inverse: ', self.loss_grid_inverse[self.iter]
                 )
 
             # Test network

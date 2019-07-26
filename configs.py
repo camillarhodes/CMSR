@@ -24,7 +24,7 @@ class Config:
     init_net_for_each_sf = False  # for gradual sr- should we optimize from the last sf or initialize each time?
 
     # Params concerning learning rate policy
-    learning_rate = 0.001
+    learning_rate = 0.0001
     learning_rate_grid = 0.001
     learning_rate_change_ratio = 1.5  # ratio between STD and slope of linear fit, under which lr is reduced
     learning_rate_policy_check_every = 60
@@ -53,8 +53,8 @@ class Config:
     cmap = None
     img_ext = 'png'
     guiding_img_ext = 'png'
-    # grid_reg_coef = 0.00001
-    grid_reg_coef = 0
+    grid_coef_bad_order = 1.0
+    grid_coef_inverse = 1.0
 
     def __init__(self, input_filter_depth=3, output_filter_depth=3,
                  guider_filter_depth=3,
@@ -101,7 +101,7 @@ THERMAL_IMAGES_CONF.scale_factors = [[5.0, 5.0]]
 # [GUY]
 DEPTH_MAPS_CONF = Config(input_filter_depth=4,
                          output_filter_depth=1)
-DEPTH_MAPS_CONF.input_path = os.path.dirname(__file__) + '/Art_tries/try_aligned'
+DEPTH_MAPS_CONF.input_path = os.path.dirname(__file__) + '/Art_tries/try_misaligned'
 DEPTH_MAPS_CONF.img_ext = 'png'
 DEPTH_MAPS_CONF.guiding_img_ext = 'png'
 DEPTH_MAPS_CONF.cmap = 'gray'
@@ -113,7 +113,7 @@ DEPTH_MAPS_CONF.scale_factors = [[4.0, 4.0]]  # list of pairs (vertical, horizon
 DEPTH_MAPS_CONF.run_test_every = 20
 DEPTH_MAPS_CONF.display_every = 1
 DEPTH_MAPS_CONF.plot_losses = True
-DEPTH_MAPS_CONF.crop_size = 64
+DEPTH_MAPS_CONF.crop_size = 128
 
 # Same as above but with visualization (Recommended for one image, interactive mode, for debugging)
 X2_IDEAL_WITH_PLOT_CONF = Config()
