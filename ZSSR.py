@@ -325,8 +325,8 @@ class ZSSR:
             self.loss_t = self.loss_rec_t
 
             if self.gi is not None:
-                bad_order_x = tf.reduce_sum(self.gi_grid[:, 0, :, :-1] - self.gi_grid[:, 0, :, 1:])
-                bad_order_y = tf.reduce_sum(self.gi_grid[:, 1, :-1, :] - self.gi_grid[:, 1, 1:, :])
+                bad_order_x = tf.reduce_sum(tf.nn.relu(self.gi_grid[:, 0, :, :-1] - self.gi_grid[:, 0, :, 1:]))
+                bad_order_y = tf.reduce_sum(tf.nn.relu(self.gi_grid[:, 1, :-1, :] - self.gi_grid[:, 1, 1:, :]))
 
                 self.loss_grid_bad_order_t = (bad_order_x + bad_order_y)/(H*W*2)
 

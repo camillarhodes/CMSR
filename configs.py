@@ -53,7 +53,7 @@ class Config:
     cmap = None
     img_ext = 'png'
     guiding_img_ext = 'png'
-    grid_coef_bad_order = 1.0
+    grid_coef_bad_order = 100.0
     grid_coef_inverse = 1.0
 
     def __init__(self, input_filter_depth=3, output_filter_depth=3,
