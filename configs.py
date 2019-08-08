@@ -101,7 +101,7 @@ THERMAL_IMAGES_CONF.scale_factors = [[5.0, 5.0]]
 # [GUY]
 DEPTH_MAPS_CONF = Config(input_filter_depth=4,
                          output_filter_depth=1)
-DEPTH_MAPS_CONF.input_path = os.path.dirname(__file__) + '/Art_tries/try_misaligned'
+DEPTH_MAPS_CONF.input_path = os.path.dirname(__file__) + '/Art_tries/try_rotated'
 DEPTH_MAPS_CONF.img_ext = 'png'
 DEPTH_MAPS_CONF.guiding_img_ext = 'png'
 DEPTH_MAPS_CONF.cmap = 'gray'
