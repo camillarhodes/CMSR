@@ -25,7 +25,7 @@ class Config:
 
     # Params concerning learning rate policy
     learning_rate = 0.0001
-    learning_rate_grid = 0.001
+    learning_rate_grid = 0.0001
     learning_rate_change_ratio = 1.5  # ratio between STD and slope of linear fit, under which lr is reduced
     learning_rate_policy_check_every = 60
     learning_rate_slope_range = 256
@@ -55,6 +55,7 @@ class Config:
     guiding_img_ext = 'png'
     grid_coef_bad_order = 100.0
     grid_coef_inverse = 1.0
+    coef_tv_guider = 1.0
 
     def __init__(self, input_filter_depth=3, output_filter_depth=3,
                  guider_filter_depth=3,

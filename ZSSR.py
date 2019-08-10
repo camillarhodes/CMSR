@@ -48,6 +48,7 @@ class ZSSR:
     loss_rec = []
     loss_grid_bad_order = []
     loss_grid_inverse = []
+    loss_tv_guider = []
     learning_rate_change_iter_nums = []
     fig = None
 
@@ -67,6 +68,7 @@ class ZSSR:
     loss_rec_t = None
     loss_grid_bad_order_t = None
     loss_grid_inverse_t = None
+    loss_tv_guider_t = None
     train_op = None
     train_grid_op = None
     init_op = None
@@ -328,13 +330,18 @@ class ZSSR:
                 bad_order_x = tf.reduce_sum(tf.nn.relu(self.gi_grid[:, 0, :, :-1] - self.gi_grid[:, 0, :, 1:]))
                 bad_order_y = tf.reduce_sum(tf.nn.relu(self.gi_grid[:, 1, :-1, :] - self.gi_grid[:, 1, 1:, :]))
 
+                tv_distance_x = tf.reduce_sum(tf.abs(warped_gi[:, 1:, :, :] - warped_gi[:, :-1, :, :]))
+                tv_distance_y = tf.reduce_sum(tf.abs(warped_gi[:, :, 1:, :] - warped_gi[:, :, :-1, :]))
+
+                self.loss_tv_guider_t = (tv_distance_x + tv_distance_y)/(H*W*2)
+
                 self.loss_grid_bad_order_t = (bad_order_x + bad_order_y)/(H*W*2)
 
                 self.loss_grid_inverse_t = tf.norm(self.gi_per_sf - warped_gi_inverse, ord=1)/(H*W)
 
                 # add the grid loss to global loss
                 self.loss_t += self.conf.grid_coef_bad_order * self.loss_grid_bad_order_t + \
-                    self.conf.grid_coef_inverse * self.loss_grid_inverse_t
+                    self.conf.grid_coef_inverse * self.loss_grid_inverse_t + self.conf.coef_tv_guider * self.loss_tv_guider_t
 
             # Apply adam optimizer
             optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate_t)
@@ -365,6 +372,7 @@ class ZSSR:
         self.loss_rec = [None] * self.conf.max_iters
         self.loss_grid_bad_order = [None] * self.conf.max_iters
         self.loss_grid_inverse = [None] * self.conf.max_iters
+        self.loss_tv_guider = [None] * self.conf.max_iters
         self.mse, self.mse_rec, self.psnr_rec, self.interp_mse, self.interp_rec_mse, self.mse_steps = [], [], [], [], [], []
         self.iter = 0
         self.learning_rate = self.conf.learning_rate
@@ -408,9 +416,9 @@ class ZSSR:
                 'augmentation_mat_grid:0': augmentation_mat_grid,
                 'augmentation_output_shape:0': interpolated_lr_son.shape[:2]
             }
-            _1, _2, self.loss[self.iter], self.loss_rec[self.iter], self.loss_grid_bad_order[self.iter], self.loss_grid_inverse[self.iter], train_output, self.augmented_grid = \
+            _1, _2, self.loss[self.iter], self.loss_rec[self.iter], self.loss_grid_bad_order[self.iter], self.loss_grid_inverse[self.iter], self.loss_tv_guider[self.iter], train_output, self.augmented_grid = \
                 self.sess.run(
-                    [self.train_grid_op, self.train_op, self.loss_t, self.loss_rec_t, self.loss_grid_bad_order_t, self.loss_grid_inverse_t, self.net_output_t, self.augmented_grid_t], feed_dict
+                    [self.train_grid_op, self.train_op, self.loss_t, self.loss_rec_t, self.loss_grid_bad_order_t, self.loss_grid_inverse_t, self.loss_tv_guider_t, self.net_output_t, self.augmented_grid_t], feed_dict
                 )
 
         else:
@@ -570,7 +578,8 @@ class ZSSR:
                     ', loss: ', self.loss[self.iter],
                     ', loss_rec: ', self.loss_rec[self.iter],
                     ', loss_grid_bad_order: ', self.loss_grid_bad_order[self.iter],
-                    ', loss_grid_inverse: ', self.loss_grid_inverse[self.iter]
+                    ', loss_grid_inverse: ', self.loss_grid_inverse[self.iter],
+                    ', loss_tv_guider: ', self.loss_tv_guider[self.iter]
                 )
 
             # Test network
