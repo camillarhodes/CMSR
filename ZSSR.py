@@ -163,16 +163,8 @@ class ZSSR:
                               else self.gt)
 
 
-
-            # Build network computational graph
-            # This happens on every new sf because of the downsampling layer
-            # that needs predetermined sf parameters
-            # self.build_network(self.conf)
-
-            # # Initialize network weights and meta parameters
-            if not self.sess or self.conf.init_net_for_each_sf:
-                self.init_sess(init_weights=False)
-
+            # Initialize network weights and meta parameters
+            self.init_sess(init_weights=self.conf.init_net_for_each_sf)
 
             # Train the network
             self.train()
@@ -631,7 +623,9 @@ class ZSSR:
                     ).eval(session=self.sess)[0]
 
                     # scale to warped_gi to the right sf
-                    warped_gi = self.father_to_son(warped_gi)
+                    warped_gi = imresize(warped_gi,
+                                        scale_factor=self.sf*self.base_sf/self.conf.scale_factors[-1],
+                                        kernel=self.conf.downscale_gt_method)
 
 
             # Apply network on the rotated input
