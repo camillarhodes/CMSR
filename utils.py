@@ -11,7 +11,7 @@ from scipy.io import loadmat
 
 
 def random_augment(ims,
-                   guiding_ims=None,
+                   guiding_im_shape=None,
                    base_scales=None,
                    leave_as_is_probability=0.2,
                    no_interpolate_probability=0.3,
@@ -24,7 +24,6 @@ def random_augment(ims,
     """Takes a random crop of the image and the guiding image.
     Returns:
         1. the image chosen randomly from `ims` list
-        2. the guider image chosen randomly from `guiding_ims` list
         3. the chosen augmentation
         4. the augmentation (from 3) with additional downscaling to be used on the guider/grid
     """
@@ -142,9 +141,8 @@ def random_augment(ims,
                      .dot(scale_mat)
                      .dot(shift_to_center_mat))
 
-    if guiding_ims:
-        guiding_im = guiding_ims[scale_ind]
-        guider_to_im_ratio = np.true_divide(guiding_im.shape, im.shape)[:2]
+    if guiding_im_shape:
+        guider_to_im_ratio = np.true_divide(guiding_im_shape, im.shape)[:2]
 
         # first scale the guider/grid to the size of the image
         scale_guider_mat = np.array([[1.0 / guider_to_im_ratio[0], 0, 0],
@@ -155,9 +153,9 @@ def random_augment(ims,
         augmentation_mat_guider = augmentation_mat.dot(scale_guider_mat)
 
 
-        return im, guiding_im, flatten_transform(augmentation_mat), flatten_transform(augmentation_mat_guider)
+        return im, flatten_transform(augmentation_mat), flatten_transform(augmentation_mat_guider)
 
-    return im, None, flatten_transform(augmentation_mat), None
+    return im, flatten_transform(augmentation_mat), None
 
 
 def flatten_transform(transformation_mat):
