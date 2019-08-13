@@ -624,11 +624,8 @@ class ZSSR:
 
                     # scale to warped_gi to the right sf
                     warped_gi = imresize(warped_gi,
-                                        scale_factor=self.sf*self.base_sf/self.conf.scale_factors[-1] if self.output_shape is None else None,
-                                        output_shape=self.output_shape,
+                                        scale_factor=self.sf*self.base_sf/self.conf.scale_factors[-1],
                                         kernel=self.conf.downscale_gt_method)
-
-
 
 
             # Apply network on the rotated input
