@@ -163,16 +163,8 @@ class ZSSR:
                               else self.gt)
 
 
-
-            # Build network computational graph
-            # This happens on every new sf because of the downsampling layer
-            # that needs predetermined sf parameters
-            # self.build_network(self.conf)
-
-            # # Initialize network weights and meta parameters
-            if not self.sess or self.conf.init_net_for_each_sf:
-                self.init_sess(init_weights=False)
-
+            # Initialize network weights and meta parameters
+            self.init_sess(init_weights=self.conf.init_net_for_each_sf)
 
             # Train the network
             self.train()
