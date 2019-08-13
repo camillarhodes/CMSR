@@ -623,7 +623,12 @@ class ZSSR:
                     ).eval(session=self.sess)[0]
 
                     # scale to warped_gi to the right sf
-                    warped_gi = self.father_to_son(warped_gi)
+                    warped_gi = imresize(warped_gi,
+                                        scale_factor=self.sf*self.base_sf/self.conf.scale_factors[-1] if self.output_shape is None else None,
+                                        output_shape=self.output_shape,
+                                        kernel=self.conf.downscale_gt_method)
+
+
 
 
             # Apply network on the rotated input
