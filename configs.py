@@ -54,8 +54,8 @@ class Config:
     img_ext = 'png'
     guiding_img_ext = 'png'
     grid_coef_bad_order = 100.0
-    grid_coef_inverse = 1.0
-    coef_tv_guider = 1.0
+    grid_coef_inverse = 0.1
+    coef_tv_guider = 0.5
 
     def __init__(self, input_filter_depth=3, output_filter_depth=3,
                  guider_filter_depth=3,
@@ -83,18 +83,18 @@ X2_ONE_JUMP_IDEAL_CONF.input_path = os.path.dirname(__file__) + '/set14'
 # [GUY]
 THERMAL_IMAGES_CONF = Config(input_filter_depth=6)
 THERMAL_IMAGES_CONF.plot_losses = True
-THERMAL_IMAGES_CONF.crop_size = 96
-THERMAL_IMAGES_CONF.max_iters = 600
+THERMAL_IMAGES_CONF.crop_size = 128
+THERMAL_IMAGES_CONF.max_iters = 800
 THERMAL_IMAGES_CONF.run_test_every = 20
 THERMAL_IMAGES_CONF.display_every = 1
-THERMAL_IMAGES_CONF.input_path = os.path.dirname(__file__) + '/data_processed/current'
+THERMAL_IMAGES_CONF.input_path = os.path.dirname(__file__) + '/data_processed/current3'
 THERMAL_IMAGES_CONF.img_ext = 'tiff'
 THERMAL_IMAGES_CONF.guiding_img_ext = 'jpg'
-THERMAL_IMAGES_CONF.scale_factors = [[5.0, 5.0]]
-# THERMAL_IMAGES_CONF.input_path = os.path.dirname(__file__) + '/ULB17-VT-rotated'
+# THERMAL_IMAGES_CONF.scale_factors = [[5.0, 5.0]]
+# THERMAL_IMAGES_CONF.input_path = os.path.dirname(__file__) + '/ULB17-VT-moved'
 # THERMAL_IMAGES_CONF.img_ext = 'png'
 # THERMAL_IMAGES_CONF.guiding_img_ext = 'png'
-# THERMAL_IMAGES_CONF.scale_factors = [[4.0, 4.0]]
+THERMAL_IMAGES_CONF.scale_factors = [[4.0, 4.0]]
 # THERMAL_IMAGES_CONF.scale_factors = [[1.0, 1.5], [1.5, 1.0], [1.5, 1.5], [1.5, 2.0], [2.0, 1.5], [2.0, 2.0]]
 # THERMAL_IMAGES_CONF.back_projection_iters = [6, 6, 8, 10, 10, 12]
 # THERMAL_IMAGES_CONF.noise_std = 0.05  # adding noise to lr-sons. small for real images, bigger for noisy images and zero for ideal case
@@ -108,7 +108,7 @@ DEPTH_MAPS_CONF.guiding_img_ext = 'png'
 DEPTH_MAPS_CONF.cmap = 'gray'
 DEPTH_MAPS_CONF.max_iters = 800
 DEPTH_MAPS_CONF.scale_factors = [[2.0, 2.0], [4.0, 4.0]]  # list of pairs (vertical, horizontal) for gradual increments in resolution
-DEPTH_MAPS_CONF.back_projection_iters = [10, 10]
+DEPTH_MAPS_CONF.back_projection_iters = [6, 6]
 DEPTH_MAPS_CONF.base_change_sfs = [[2.0, 2.0]]  # list of pairs (vertical, horizontal) for gradual increments in resolution
 # DEPTH_MAPS_CONF.scale_factors = [[2.0, 2.0], [4.0, 4.5]]  # list of pairs (vertical, horizontal) for gradual increments in resolution
 # DEPTH_MAPS_CONF.scale_factors = [[4.0, 4.5]]  # list of pairs (vertical, horizontal) for gradual increments in resolution
