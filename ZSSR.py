@@ -264,27 +264,34 @@ class ZSSR:
 
                 warped_gi_inverse = generic_transformer(warped_gi, self.gi_grid_inverse)
 
-                # self.filters_t_guider = [tf.get_variable(shape=meta.filter_shape_guider[ind], name='filter_guider_%d' % ind,
-                #                                          initializer=tf.zeros_initializer())
-                #                          for ind in range(meta.depth)]
+                self.filters_t_guider = [tf.get_variable(shape=meta.filter_shape_guider[ind], name='filter_guider_%d' % ind,
+                                                         initializer=tf.random_normal_initializer(
+                                                  stddev=np.sqrt(meta.init_variance/np.prod(
+                                                      meta.filter_shape_guider[ind][0:3]))
+                                                         ))
+                                         for ind in range(meta.depth)]
+
+                # # Define merging layer for the guider image if needed
+                # concat_layer = tf.concat(
+                #     [self.lr_son_t, self.hr_guider_t], 3, name ='concat_layer'
+                # )
+
+                self.layers_t_guider = [self.hr_guider_t] + [None] * meta.depth
+
+                for l in range(meta.depth - 1):
+                    self.layers_t_guider[l + 1] = tf.nn.relu(tf.nn.conv2d(self.layers_t_guider[l], self.filters_t_guider[l],
+                        [1, 1, 1, 1], "SAME", name='layer_%d' % (l + 1)
+                    ))
+
+                l = meta.depth - 1
+                self.layers_t_guider[-1] = tf.nn.conv2d(self.layers_t_guider[l], self.filters_t_guider[l],
+                    [1, 1, 1, 1], "SAME", name='layer_%d' % (l + 1)
+                )
 
                 # Define merging layer for the guider image if needed
                 concat_layer = tf.concat(
-                    [self.lr_son_t, self.hr_guider_t], 3, name ='concat_layer'
+                    [self.lr_son_t, self.layers_t_guider[-1]], 3, name ='concat_layer'
                 )
-
-                # self.layers_t_guider = [self.hr_guider_t] + [None] * meta.depth
-
-                # for l in range(meta.depth - 1):
-                #     self.layers_t_guider[l + 1] = tf.nn.relu(tf.nn.conv2d(self.layers_t_guider[l], self.filters_t_guider[l],
-                #         [1, 1, 1, 1], "SAME", name='layer_%d' % (l + 1)
-                #     ))
-
-                # l = meta.depth - 1
-                # self.layers_t_guider[-1] = tf.nn.conv2d(self.layers_t_guider[l], self.filters_t_guider[l],
-                #     [1, 1, 1, 1], "SAME", name='layer_%d' % (l + 1)
-                # )
-
 
 
             # Define first layer
@@ -325,8 +332,12 @@ class ZSSR:
                 bad_order_x = tf.reduce_sum(tf.nn.relu(self.gi_grid[:, 0, :, :-1] - self.gi_grid[:, 0, :, 1:]))
                 bad_order_y = tf.reduce_sum(tf.nn.relu(self.gi_grid[:, 1, :-1, :] - self.gi_grid[:, 1, 1:, :]))
 
-                tv_distance_x = tf.reduce_sum(tf.abs(warped_gi[:, 1:, :, :] - warped_gi[:, :-1, :, :]))
-                tv_distance_y = tf.reduce_sum(tf.abs(warped_gi[:, :, 1:, :] - warped_gi[:, :, :-1, :]))
+                # tv_distance_x = tf.reduce_sum(tf.abs(warped_gi[:, 1:, :, :] - warped_gi[:, :-1, :, :]))
+                # tv_distance_y = tf.reduce_sum(tf.abs(warped_gi[:, :, 1:, :] - warped_gi[:, :, :-1, :]))
+                displacements_x = self.gi_grid[0, 0, :, 1:] - self.gi_grid[0, 0, :, :-1]
+                displacements_y = self.gi_grid[0, 1, 1:, :] - self.gi_grid[0, 1, :-1, :]
+                tv_distance_x = tf.reduce_sum(tf.abs(displacements_x[:, 1:] - displacements_x[:, :-1]))
+                tv_distance_y = tf.reduce_sum(tf.abs(displacements_y[1:, :] - displacements_y[:-1, :]))
 
                 self.loss_tv_guider_t = (tv_distance_x + tv_distance_y)/(H*W*2)
 
@@ -336,8 +347,8 @@ class ZSSR:
                 # self.loss_grid_inverse_t = tf.norm(self.gi_per_sf - warped_gi_inverse, ord=1)/(H*W)
 
                 # add the grid loss to global loss
-                self.loss_t += self.conf.grid_coef_bad_order * self.loss_grid_bad_order_t + \
-                    self.conf.grid_coef_inverse * self.loss_grid_inverse_t + self.conf.coef_tv_guider * self.loss_tv_guider_t
+                # self.loss_t += self.conf.grid_coef_bad_order * self.loss_grid_bad_order_t + \
+                #     self.conf.grid_coef_inverse * self.loss_grid_inverse_t + self.conf.coef_tv_guider * self.loss_tv_guider_t
 
             # Apply adam optimizer
             optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate_t)
@@ -398,9 +409,9 @@ class ZSSR:
                 'augmentation_mat_grid:0': augmentation_mat_grid,
                 'augmentation_output_shape:0': interpolated_lr_son.shape[:2]
             }
-            _1, _2, self.loss[self.iter], self.loss_rec[self.iter], self.loss_grid_bad_order[self.iter], self.loss_grid_inverse[self.iter], self.loss_tv_guider[self.iter], train_output, self.augmented_grid = \
+            self.xx, _1, self.loss[self.iter], self.loss_rec[self.iter], self.loss_grid_bad_order[self.iter], self.loss_grid_inverse[self.iter], self.loss_tv_guider[self.iter], train_output, self.augmented_grid = \
                 self.sess.run(
-                    [self.train_grid_op, self.train_op, self.loss_t, self.loss_rec_t, self.loss_grid_bad_order_t, self.loss_grid_inverse_t, self.loss_tv_guider_t, self.net_output_t, self.augmented_grid_t], feed_dict
+                    [self.layers_t_guider[-1], self.train_op, self.loss_t, self.loss_rec_t, self.loss_grid_bad_order_t, self.loss_grid_inverse_t, self.loss_tv_guider_t, self.net_output_t, self.augmented_grid_t], feed_dict
                 )
 
         else:
@@ -480,7 +491,9 @@ class ZSSR:
         # self.sr = self.forward_pass(self.input, self.gi, self.gi_per_sf.shape if self.gi is not None else None)
 
         # 1. True MSE (only if ground-truth was given), note: this error is before post-processing.
-        self.gt_per_sf, = remove_n_channels_dim(self.gt_per_sf)
+        #TODO: do something less ugly
+        if self.gt_per_sf.shape[2] == 1:
+            self.gt_per_sf, = remove_n_channels_dim(self.gt_per_sf)
         self.mse = self.mse + [np.mean(np.ndarray.flatten(np.square(self.gt_per_sf - self.sr)))
                     if self.gt_per_sf is not None else None]
 
@@ -530,7 +543,7 @@ class ZSSR:
 
             chosen_image, chosen_augmentation, chosen_augmentation_grid = random_augment(
                 ims=self.hr_fathers_sources,
-                guiding_im_shape=self.gi.shape,
+                guiding_im_shape=self.gi.shape if self.gi is not None else None,
                 base_scales=[1.0] + self.conf.scale_factors,
                 leave_as_is_probability=self.conf.augment_leave_as_is_probability,
                 no_interpolate_probability=self.conf.augment_no_interpolate_probability,
