@@ -480,7 +480,7 @@ class ZSSR:
         # self.sr = self.forward_pass(self.input, self.gi, self.gi_per_sf.shape if self.gi is not None else None)
 
         # 1. True MSE (only if ground-truth was given), note: this error is before post-processing.
-        self.gt_per_sf, = remove_n_channels_dim(self.gt_per_sf)
+        # self.gt_per_sf, = remove_n_channels_dim(self.gt_per_sf)
         self.mse = self.mse + [np.mean(np.ndarray.flatten(np.square(self.gt_per_sf - self.sr)))
                     if self.gt_per_sf is not None else None]
 
