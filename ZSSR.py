@@ -1,4 +1,5 @@
 import tensorflow as tf
+import tensorlayer as tl
 import matplotlib.pyplot as plt
 import matplotlib.image as img
 import ipdb
@@ -311,14 +312,19 @@ class ZSSR:
 
             # Last conv layer (Separate because no ReLU here)
             l = meta.depth - 1
-            self.layers_t[-1] = tf.nn.conv2d(self.layers_t[l], self.filters_t[l],
-                                             [1, 1, 1, 1], "SAME", name='layer_%d' % (l + 1))
+            # self.layers_t[-1] = tf.nn.conv2d(self.layers_t[l], self.filters_t[l],
+            #                                  [1, 1, 1, 1], "SAME", name='layer_%d' % (l + 1))
+            # last layer is deformable
+            import ipdb; ipdb.set_trace()
+            self.layers_t[-1] = tl.layers.DeformableConv2d(offset_layer=self.layers_t_guider[-1],
+                                                           n_filter=3, filter_size=(3,3),
+                                                           name='layer_%d' % (l + 1))(self.layers_t[l])
             # Output image (Add last conv layer result to input, residual learning with global skip connection)
             self.net_output_t = self.layers_t[-1] +  self.conf.learn_residual * self.lr_son_t
 
 
-            if self.gi is not None:
-                self.net_output_t += self.layers_t_guider[-1]
+            # if self.gi is not None:
+            #     self.net_output_t += self.layers_t_guider[-1]
 
             # Final loss (L1 loss between label and output layer)
             self.loss_rec_t = tf.reduce_mean(tf.reshape(tf.abs(self.net_output_t - self.hr_father_t), [-1]))
