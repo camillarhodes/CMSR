@@ -71,7 +71,7 @@ class Config:
                              [[3, 3, self.width, output_filter_depth]])
         self.filter_shape_guider = ([[3, 3, guider_filter_depth, self.width]] +
                              [[3, 3, self.width, self.width]] * (self.depth-2) +
-                             [[3, 3, self.width, output_filter_depth]])
+                             [[3, 3, self.width, guider_filter_depth]])
 
 
 ########################################
