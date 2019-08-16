@@ -271,10 +271,10 @@ class ZSSR:
                                                          ))
                                          for ind in range(meta.depth)]
 
-                # Define merging layer for the guider image if needed
-                concat_layer = tf.concat(
-                    [self.lr_son_t, self.hr_guider_t], 3, name ='concat_layer'
-                )
+                # # Define merging layer for the guider image if needed
+                # concat_layer = tf.concat(
+                #     [self.lr_son_t, self.hr_guider_t], 3, name ='concat_layer'
+                # )
 
                 self.layers_t_guider = [self.hr_guider_t] + [None] * meta.depth
 
@@ -288,6 +288,10 @@ class ZSSR:
                     [1, 1, 1, 1], "SAME", name='layer_%d' % (l + 1)
                 )
 
+                # Define merging layer for the guider image if needed
+                concat_layer = tf.concat(
+                    [self.lr_son_t, self.layers_t_guider[-1]], 3, name ='concat_layer'
+                )
 
 
             # Define first layer
@@ -317,8 +321,8 @@ class ZSSR:
             self.net_output_t = self.layers_t[-1] +  self.conf.learn_residual * self.lr_son_t
 
 
-            if self.gi is not None:
-                self.net_output_t += self.layers_t_guider[-1]
+            # if self.gi is not None:
+            #     self.net_output_t += self.layers_t_guider[-1]
 
             # Final loss (L1 loss between label and output layer)
             self.loss_rec_t = tf.reduce_mean(tf.reshape(tf.abs(self.net_output_t - self.hr_father_t), [-1]))
@@ -343,8 +347,8 @@ class ZSSR:
                 # self.loss_grid_inverse_t = tf.norm(self.gi_per_sf - warped_gi_inverse, ord=1)/(H*W)
 
                 # add the grid loss to global loss
-                self.loss_t += self.conf.grid_coef_bad_order * self.loss_grid_bad_order_t + \
-                    self.conf.grid_coef_inverse * self.loss_grid_inverse_t + self.conf.coef_tv_guider * self.loss_tv_guider_t
+                # self.loss_t += self.conf.grid_coef_bad_order * self.loss_grid_bad_order_t + \
+                #     self.conf.grid_coef_inverse * self.loss_grid_inverse_t + self.conf.coef_tv_guider * self.loss_tv_guider_t
 
             # Apply adam optimizer
             optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate_t)
@@ -405,9 +409,9 @@ class ZSSR:
                 'augmentation_mat_grid:0': augmentation_mat_grid,
                 'augmentation_output_shape:0': interpolated_lr_son.shape[:2]
             }
-            self.xx, _1, _2, self.loss[self.iter], self.loss_rec[self.iter], self.loss_grid_bad_order[self.iter], self.loss_grid_inverse[self.iter], self.loss_tv_guider[self.iter], train_output, self.augmented_grid = \
+            self.xx, _1, self.loss[self.iter], self.loss_rec[self.iter], self.loss_grid_bad_order[self.iter], self.loss_grid_inverse[self.iter], self.loss_tv_guider[self.iter], train_output, self.augmented_grid = \
                 self.sess.run(
-                    [self.layers_t_guider[1], self.train_grid_op, self.train_op, self.loss_t, self.loss_rec_t, self.loss_grid_bad_order_t, self.loss_grid_inverse_t, self.loss_tv_guider_t, self.net_output_t, self.augmented_grid_t], feed_dict
+                    [self.layers_t[4], self.train_op, self.loss_t, self.loss_rec_t, self.loss_grid_bad_order_t, self.loss_grid_inverse_t, self.loss_tv_guider_t, self.net_output_t, self.augmented_grid_t], feed_dict
                 )
 
         else:
@@ -537,7 +541,7 @@ class ZSSR:
 
             chosen_image, chosen_augmentation, chosen_augmentation_grid = random_augment(
                 ims=self.hr_fathers_sources,
-                guiding_im_shape=self.gi.shape,
+                guiding_im_shape=self.gi.shape if self.gi is not None else None,
                 base_scales=[1.0] + self.conf.scale_factors,
                 leave_as_is_probability=self.conf.augment_leave_as_is_probability,
                 no_interpolate_probability=self.conf.augment_no_interpolate_probability,
