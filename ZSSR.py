@@ -8,7 +8,8 @@ from matplotlib.gridspec import GridSpec
 from configs import Config
 from utils import *
 from generic_stn import generic_grid_generator, generic_spatial_transformer_network as generic_transformer
-
+from ddtn.transformers.setup_CPAB_transformer import setup_CPAB_transformer
+from ddtn.transformers.transformer_util import get_transformer_layer
 
 class ZSSR:
     # Basic current state variables initialization / declaration
@@ -62,6 +63,8 @@ class ZSSR:
     initial_grid = None
     filters_t = None
     layers_t = None
+    layers_t_guider = None
+    layers_t_localisation = None
     net_output_t = None
     loss_t = None
     loss_rec_t = None
@@ -221,8 +224,38 @@ class ZSSR:
 
             # Guider grid, for learning to warp the guider image
             if self.gi is not None:
+                self.filters_t_guider = [tf.get_variable(shape=meta.filter_shape_guider[ind], name='filter_guider_%d' % ind,
+                                                         initializer=tf.random_normal_initializer(
+                                                             stddev=np.sqrt(meta.init_variance/np.prod(
+                                                                 meta.filter_shape_guider[ind][0:3]))
+                                                         ))
+                                         for ind in range(meta.depth)]
+
+                # Initialization for DTN
+                import ipdb; ipdb.set_trace()
+                setup_CPAB_transformer()
+                dim = get_transformer_dim('CPAB')
+                dtn_transformer_layer = get_transformer_layer('CPAB')
+
+                # Localization net for dtn layer
+                self.layers_t_localisation = [self.hr_guider_t] + [None] * 6
+                for l in range(5):
+                    self.layers_t_localisation[l + 1] = tf.nn.relu(tf.nn.conv2d(self.layers_t_localisation[l], self.filters_t_guider[l],
+                                                                                [1, 1, 1, 1], "SAME", name='layer_%d' % (l + 1)
+                                                                                ))
+                self.units_t_localisation = [100, 50, dim]
+                for l in range(3):
+                    self.layers_t_localisation[l + 1 + 5] = tf.contrib.layers.fully_connected(self.layers_t_localisation[l], self.units_t_localisation[l])
+
+                theta = self.layers_t_localisation[-1]
+
+                # Transformer imgs
+                self.hr_guider_t = transformer(self.hr_guider_t, theta, (1200, 1600))
+
+                # setup PACB layer
+
+                # Create grid sampler for guiding image
                 B, H, W, C = (1, self.gi.shape[0], self.gi.shape[1], 3)
-                # B, H, W, C = (1, self.gi_per_sf.shape[0], self.gi_per_sf.shape[1], 3)
                 self.gi_grid = tf.Variable(initial_value=generic_grid_generator(H, W, B))
                 self.gi_grid_inverse = tf.Variable(initial_value=generic_grid_generator(H, W, B))
                 if self.initial_grid is None:
@@ -244,8 +277,6 @@ class ZSSR:
                 self.augmented_grid_t = tf.expand_dims(augmented_grid_t, 0)
 
 
-
-
                 should_warp_guider = tf.placeholder_with_default(True, shape=(), name='should_warp_guider')
 
                 def get_warped_guider():
@@ -264,12 +295,12 @@ class ZSSR:
 
                 warped_gi_inverse = generic_transformer(warped_gi, self.gi_grid_inverse)
 
-                self.filters_t_guider = [tf.get_variable(shape=meta.filter_shape_guider[ind], name='filter_guider_%d' % ind,
-                                                         initializer=tf.random_normal_initializer(
-                                                  stddev=np.sqrt(meta.init_variance/np.prod(
-                                                      meta.filter_shape_guider[ind][0:3]))
-                                                         ))
-                                         for ind in range(meta.depth)]
+#                 self.filters_t_guider = [tf.get_variable(shape=meta.filter_shape_guider[ind], name='filter_guider_%d' % ind,
+#                                                          initializer=tf.random_normal_initializer(
+#                                                   stddev=np.sqrt(meta.init_variance/np.prod(
+#                                                       meta.filter_shape_guider[ind][0:3]))
+#                                                          ))
+#                                          for ind in range(meta.depth)]
 
                 # # Define merging layer for the guider image if needed
                 # concat_layer = tf.concat(

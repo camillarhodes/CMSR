@@ -1,0 +1,3 @@
+[submodule "ddtn"]
+	path = ddtn
+	url = https://github.com/camillarhodes/ddtn
