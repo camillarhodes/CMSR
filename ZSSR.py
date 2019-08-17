@@ -9,7 +9,7 @@ from configs import Config
 from utils import *
 from generic_stn import generic_grid_generator, generic_spatial_transformer_network as generic_transformer
 from ddtn.transformers.setup_CPAB_transformer import setup_CPAB_transformer
-from ddtn.transformers.transformer_util import get_transformer_layer
+from ddtn.transformers.transformer_util import get_transformer_layer, get_transformer_dim
 
 class ZSSR:
     # Basic current state variables initialization / declaration
@@ -232,27 +232,38 @@ class ZSSR:
                                          for ind in range(meta.depth)]
 
                 # Initialization for DTN
-                import ipdb; ipdb.set_trace()
-                setup_CPAB_transformer()
+                setup_CPAB_transformer(ncx=2, ncy=2, name='CPAB')
                 dim = get_transformer_dim('CPAB')
                 dtn_transformer_layer = get_transformer_layer('CPAB')
 
                 # Localization net for dtn layer
-                self.layers_t_localisation = [self.hr_guider_t] + [None] * 6
-                for l in range(5):
+                self.hr_guider_t.set_shape((1, ) + self.gi.shape)
+                # n_cnn_loc = 4
+                n_cnn_loc = 2
+                # n_fc_loc = 3
+                n_fc_loc = 1
+
+                self.layers_t_localisation = [self.hr_guider_t] + [None] * (n_cnn_loc + n_fc_loc)
+                for l in range(n_cnn_loc - 1):
                     self.layers_t_localisation[l + 1] = tf.nn.relu(tf.nn.conv2d(self.layers_t_localisation[l], self.filters_t_guider[l],
-                                                                                [1, 1, 1, 1], "SAME", name='layer_%d' % (l + 1)
+                                                                                [1, 1, 1, 1], "SAME", name='layer_loc_%d' % (l + 1)
                                                                                 ))
-                self.units_t_localisation = [100, 50, dim]
-                for l in range(3):
-                    self.layers_t_localisation[l + 1 + 5] = tf.contrib.layers.fully_connected(self.layers_t_localisation[l], self.units_t_localisation[l])
+                l = n_cnn_loc - 1
+                self.layers_t_localisation[l+1] = tf.reshape(tf.nn.conv2d(self.layers_t_localisation[l], self.filters_t_guider[-1],
+                                             [1, 1, 1, 1], "SAME", name='layer_loc_%d' % (l + 1))
+                                                             , (1, -1)
+                                                             )
+            #
+                # self.units_t_localisation = [100, 50, dim]
+                self.units_t_localisation = [dim]
+                for l in range(n_fc_loc):
+                    self.layers_t_localisation[l + 1 + n_cnn_loc] = tf.contrib.layers.fully_connected(self.layers_t_localisation[l+n_cnn_loc], self.units_t_localisation[l])
 
                 theta = self.layers_t_localisation[-1]
 
-                # Transformer imgs
-                self.hr_guider_t = transformer(self.hr_guider_t, theta, (1200, 1600))
+                # Transforme the guiding image
+                self.hr_guider_t = dtn_transformer_layer(self.hr_guider_t, theta, self.gi.shape[:2])
 
-                # setup PACB layer
 
                 # Create grid sampler for guiding image
                 B, H, W, C = (1, self.gi.shape[0], self.gi.shape[1], 3)
@@ -303,26 +314,26 @@ class ZSSR:
 #                                          for ind in range(meta.depth)]
 
                 # # Define merging layer for the guider image if needed
-                # concat_layer = tf.concat(
-                #     [self.lr_son_t, self.hr_guider_t], 3, name ='concat_layer'
+                concat_layer = tf.concat(
+                    [self.lr_son_t, self.hr_guider_t], 3, name ='concat_layer'
+                )
+
+                # self.layers_t_guider = [self.hr_guider_t] + [None] * meta.depth
+
+                # for l in range(meta.depth - 1):
+                #     self.layers_t_guider[l + 1] = tf.nn.relu(tf.nn.conv2d(self.layers_t_guider[l], self.filters_t_guider[l],
+                #         [1, 1, 1, 1], "SAME", name='layer_%d' % (l + 1)
+                #     ))
+
+                # l = meta.depth - 1
+                # self.layers_t_guider[-1] = tf.nn.conv2d(self.layers_t_guider[l], self.filters_t_guider[l],
+                #     [1, 1, 1, 1], "SAME", name='layer_%d' % (l + 1)
                 # )
 
-                self.layers_t_guider = [self.hr_guider_t] + [None] * meta.depth
-
-                for l in range(meta.depth - 1):
-                    self.layers_t_guider[l + 1] = tf.nn.relu(tf.nn.conv2d(self.layers_t_guider[l], self.filters_t_guider[l],
-                        [1, 1, 1, 1], "SAME", name='layer_%d' % (l + 1)
-                    ))
-
-                l = meta.depth - 1
-                self.layers_t_guider[-1] = tf.nn.conv2d(self.layers_t_guider[l], self.filters_t_guider[l],
-                    [1, 1, 1, 1], "SAME", name='layer_%d' % (l + 1)
-                )
-
-                # Define merging layer for the guider image if needed
-                concat_layer = tf.concat(
-                    [self.lr_son_t, self.layers_t_guider[-1]], 3, name ='concat_layer'
-                )
+                # # Define merging layer for the guider image if needed
+                # concat_layer = tf.concat(
+                #     [self.lr_son_t, self.layers_t_guider[-1]], 3, name ='concat_layer'
+                # )
 
 
             # Define first layer
@@ -440,9 +451,9 @@ class ZSSR:
                 'augmentation_mat_grid:0': augmentation_mat_grid,
                 'augmentation_output_shape:0': interpolated_lr_son.shape[:2]
             }
-            self.xx, _1, self.loss[self.iter], self.loss_rec[self.iter], self.loss_grid_bad_order[self.iter], self.loss_grid_inverse[self.iter], self.loss_tv_guider[self.iter], train_output, self.augmented_grid = \
+            _1, self.loss[self.iter], self.loss_rec[self.iter], self.loss_grid_bad_order[self.iter], self.loss_grid_inverse[self.iter], self.loss_tv_guider[self.iter], train_output, self.augmented_grid = \
                 self.sess.run(
-                    [self.layers_t_guider[-1], self.train_op, self.loss_t, self.loss_rec_t, self.loss_grid_bad_order_t, self.loss_grid_inverse_t, self.loss_tv_guider_t, self.net_output_t, self.augmented_grid_t], feed_dict
+                    [self.train_op, self.loss_t, self.loss_rec_t, self.loss_grid_bad_order_t, self.loss_grid_inverse_t, self.loss_tv_guider_t, self.net_output_t, self.augmented_grid_t], feed_dict
                 )
 
         else:
@@ -529,7 +540,8 @@ class ZSSR:
                     if self.gt_per_sf is not None else None]
 
         # 2. Reconstruction MSE, run for reconstruction- try to reconstruct the input from a downscaled version of it
-        self.reconstruct_output = self.forward_pass(self.father_to_son(self.input), self.father_to_son(self.gi), self.input.shape)
+        self.reconstruct_output = self.forward_pass(self.father_to_son(self.input), self.gi, self.input.shape)
+        # self.reconstruct_output = self.forward_pass(self.father_to_son(self.input), self.father_to_son(self.gi), self.input.shape)
 
         # [GUY] add n_channels when needed
         self.input, self.reconstruct_output, self.sr, self.gt_per_sf = add_n_channels_dim(self.input, self.reconstruct_output, self.sr, self.gt_per_sf)
