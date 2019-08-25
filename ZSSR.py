@@ -463,7 +463,6 @@ class ZSSR:
                     # [self.train_op, self.loss_t, self.loss_rec_t, self.loss_grid_bad_order_t, self.loss_grid_inverse_t, self.loss_tv_guider_t, self.net_output_t, self.augmented_grid_t], feed_dict
                     [self.train_op, self.train_dtn_op, self.theta_t, self.hr_guider_t, self.loss_t, self.loss_rec_t, self.net_output_t, self.augmented_grid_t], feed_dict
                 )
-            print(theta)
 
         else:
             feed_dict = {
