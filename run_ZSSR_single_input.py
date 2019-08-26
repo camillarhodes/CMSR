@@ -18,7 +18,7 @@ def main(input_img, ground_truth, guiding_img, kernels, gpu, conf_str, results_p
     # Setup configuration and results directory
     conf = configs.Config()
     if conf_str is not None:
-        exec ('conf = configs.%s' % conf_str)
+        conf =  getattr(configs, conf_str)
     conf.result_path = results_path
 
     # Run ZSSR on the image

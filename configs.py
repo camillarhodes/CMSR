@@ -1,5 +1,4 @@
 import os
-import cv2
 import matplotlib.pyplot as plt
 
 
@@ -26,7 +25,7 @@ class Config:
     # Params concerning learning rate policy
     learning_rate = 0.0001
     # learning_rate_grid = 0.0001
-    learning_rate_grid = 0.001
+    # learning_rate_grid = 0.001
     learning_rate_change_ratio = 1.5  # ratio between STD and slope of linear fit, under which lr is reduced
     learning_rate_policy_check_every = 60
     learning_rate_slope_range = 256
@@ -84,21 +83,23 @@ X2_ONE_JUMP_IDEAL_CONF = Config()
 X2_ONE_JUMP_IDEAL_CONF.input_path = os.path.dirname(__file__) + '/set14'
 
 # [GUY]
-THERMAL_IMAGES_CONF = Config(input_filter_depth=4, output_filter_depth=1)
+THERMAL_IMAGES_CONF = Config(input_filter_depth=6, output_filter_depth=1)
 THERMAL_IMAGES_CONF.plot_losses = True
-THERMAL_IMAGES_CONF.crop_size = 96
+THERMAL_IMAGES_CONF.crop_size = 64
 THERMAL_IMAGES_CONF.max_iters = 800
 THERMAL_IMAGES_CONF.run_test_every = 20
 THERMAL_IMAGES_CONF.display_every = 1
 # THERMAL_IMAGES_CONF.input_path = os.path.dirname(__file__) + '/data_processed/current3'
-THERMAL_IMAGES_CONF.input_path = os.path.dirname(__file__) + '/Maagad'
+# THERMAL_IMAGES_CONF.input_path = os.path.dirname(__file__) + '/Maagad_reg2'
 # THERMAL_IMAGES_CONF.img_ext = 'tiff'
 # THERMAL_IMAGES_CONF.guiding_img_ext = 'jpg'
 # THERMAL_IMAGES_CONF.scale_factors = [[5.0, 5.0]]
-# THERMAL_IMAGES_CONF.input_path = os.path.dirname(__file__) + '/ULB17-VT-moved'
+THERMAL_IMAGES_CONF.input_path = os.path.dirname(__file__) + '/ULB17-VT-rotated'
 THERMAL_IMAGES_CONF.img_ext = 'png'
 THERMAL_IMAGES_CONF.guiding_img_ext = 'png'
-THERMAL_IMAGES_CONF.scale_factors = [[4.0, 4.0]]
+#THERMAL_IMAGES_CONF.scale_factors = [[2.0, 2.0], [4.0, 4.0]]  # list of pairs (vertical, horizontal) for gradual increments in resolution
+# THERMAL_IMAGES_CONF.back_projection_iters = [6, 6]
+THERMAL_IMAGES_CONF.scale_factors = [[4.0, 4.0]]  # list of pairs (vertical, horizontal) for gradual increments in resolution
 # THERMAL_IMAGES_CONF.scale_factors = [[1.0, 1.5], [1.5, 1.0], [1.5, 1.5], [1.5, 2.0], [2.0, 1.5], [2.0, 2.0]]
 # THERMAL_IMAGES_CONF.back_projection_iters = [6, 6, 8, 10, 10, 12]
 # THERMAL_IMAGES_CONF.noise_std = 0.05  # adding noise to lr-sons. small for real images, bigger for noisy images and zero for ideal case
@@ -106,22 +107,23 @@ THERMAL_IMAGES_CONF.scale_factors = [[4.0, 4.0]]
 # [GUY]
 DEPTH_MAPS_CONF = Config(input_filter_depth=4,
                          output_filter_depth=1)
-DEPTH_MAPS_CONF.input_path = os.path.dirname(__file__) + '/Art_tries/try_rotated'
+DEPTH_MAPS_CONF.input_path = os.path.dirname(__file__) + '/vase'
 DEPTH_MAPS_CONF.img_ext = 'png'
 DEPTH_MAPS_CONF.guiding_img_ext = 'png'
 DEPTH_MAPS_CONF.cmap = 'gray'
 DEPTH_MAPS_CONF.max_iters = 800
 DEPTH_MAPS_CONF.scale_factors = [[2.0, 2.0], [4.0, 4.0]]  # list of pairs (vertical, horizontal) for gradual increments in resolution
 DEPTH_MAPS_CONF.back_projection_iters = [6, 6]
-DEPTH_MAPS_CONF.base_change_sfs = [[2.0, 2.0]]  # list of pairs (vertical, horizontal) for gradual increments in resolution
+# DEPTH_MAPS_CONF.base_change_sfs = [[2.0, 2.0]]  # list of pairs (vertical, horizontal) for gradual increments in resolution
 # DEPTH_MAPS_CONF.scale_factors = [[2.0, 2.0], [4.0, 4.5]]  # list of pairs (vertical, horizontal) for gradual increments in resolution
-# DEPTH_MAPS_CONF.scale_factors = [[4.0, 4.5]]  # list of pairs (vertical, horizontal) for gradual increments in resolution
+# DEPTH_MAPS_CONF.scale_factors = [[4.0, 4.0]]
 # DEPTH_MAPS_CONF.scale_factors = [[1.0, 2.0], [2.0, 1.0], [2.0, 2.0], [2.0, 3.0], [3.0, 2.0], [3.0, 3.0], [3.0, 4.0], [4.0, 3.0], [4.0, 4.0], [4.0, 4.5]]
 # DEPTH_MAPS_CONF.back_projection_iters = [6, 6, 6, 8, 8, 8, 10, 10, 12, 12]
 DEPTH_MAPS_CONF.run_test_every = 20
 DEPTH_MAPS_CONF.display_every = 1
 DEPTH_MAPS_CONF.plot_losses = True
 DEPTH_MAPS_CONF.crop_size = 128
+# DEPTH_MAPS_CONF.init_net_for_each_sf = True
 
 # Same as above but with visualization (Recommended for one image, interactive mode, for debugging)
 X2_IDEAL_WITH_PLOT_CONF = Config()

@@ -16,6 +16,8 @@ class ZSSR:
     learning_rate = None
     hr_father = None
     hr_guider = None
+    hr_guider_deformed = None
+    hr_guider_augmented = None
     lr_son = None
     sr = None
     sf = None
@@ -53,12 +55,15 @@ class ZSSR:
 
     # Network tensors (all tensors end with _t to distinguish)
     learning_rate_t = None
-    learning_rate_grid_t = None
+    # learning_rate_grid_t = None
     lr_son_t = None
     hr_father_t = None
     hr_guider_t = None
+    hr_guider_with_shape_t = None
+    hr_guider_deformed_t = None
+    hr_guider_augmented_t = None
     gi_grid = None
-    gi_grid_inverse = None
+    # gi_grid_inverse = None
     initial_grid = None
     filters_t = None
     layers_t = None
@@ -70,8 +75,12 @@ class ZSSR:
     loss_grid_bad_order_t = None
     loss_grid_inverse_t = None
     loss_tv_guider_t = None
+    theta_cpab_t = None
     train_op = None
     train_grid_op = None
+    train_affine_op = None
+    train_tps_op = None
+    train_cpab_op = None
     init_op = None
 
     # Parameters related to plotting and graphics
@@ -208,7 +217,19 @@ class ZSSR:
             self.learning_rate_t = tf.placeholder(tf.float32, name='learning_rate')
 
             if self.gi is not None:
-                self.learning_rate_grid_t = tf.placeholder(tf.float32, name='learning_rate_grid')
+                # self.learning_rate_grid_t = tf.placeholder(tf.float32, name='learning_rate_grid')
+
+                # Most times we need to deform the guider. sometimes we do it
+                # outside of the network so it's unneeded here
+                should_deform_and_augment_guider = tf.placeholder_with_default(True, shape=(), name='should_deform_and_augment_guider')
+
+                # Guider image
+                self.hr_guider_t = tf.placeholder(tf.float32, name='hr_guider')
+
+                # Guider image with shape, needed for TPS / affine
+                # transformations
+                self.hr_guider_with_shape_t = tf.Variable(np.zeros((1, ) + self.gi.shape), dtype=np.float32, trainable=False)
+
 
             # Input image
             self.lr_son_t = tf.placeholder(tf.float32, name='lr_son')
@@ -216,65 +237,36 @@ class ZSSR:
             # Ground truth (supervision)
             self.hr_father_t = tf.placeholder(tf.float32, name='hr_father')
 
-            # Guider image
-            self.hr_guider_t = tf.placeholder(tf.float32, name='hr_guider')
 
             concat_layer = None
 
-            # Guider grid, for learning to warp the guider image
             if self.gi is not None:
-                self.filters_t_guider = [tf.get_variable(shape=meta.filter_shape_guider[ind], name='filter_guider_%d' % ind,
-                                                         initializer=tf.random_normal_initializer(
-                                                             stddev=np.sqrt(meta.init_variance/np.prod(
-                                                                 meta.filter_shape_guider[ind][0:3]))
-                                                         ))
-                                         for ind in range(meta.depth)]
 
-                # Initialization for DTN
-                # s1 = setup_CPAB_transformer(ncx=2, ncy=2, override=True)
-                dim = get_transformer_dim('TPS')
-                dtn_transformer_layer = get_transformer_layer('TPS')
+                # Learn the TPS / affine parameters
+                # dim_tps = get_transformer_dim('TPS')
+                # dim_affine = get_transformer_dim('affine')
+                dim_cpab = get_transformer_dim('CPAB')
 
-                # Localization net for dtn layer
-                self.hr_guider_t.set_shape((1, ) + self.gi.shape)
-                n_cnn_loc = 4
-                # n_cnn_loc = 2
-                n_fc_loc = 3
-                # n_fc_loc = 1
+                # tps_layer = get_transformer_layer('TPS')
+                # affine_layer = get_transformer_layer('affine')
+                cpab_layer = get_transformer_layer('CPAB')
 
-                self.layers_t_localisation = [self.hr_guider_t] + [None] * (n_cnn_loc + n_fc_loc)
-                for l in range(n_cnn_loc - 1):
-                    self.layers_t_localisation[l + 1] = tf.nn.relu(tf.nn.conv2d(self.layers_t_localisation[l], self.filters_t_guider[l],
-                                                                                [1, 1, 1, 1], "SAME", name='layer_guider_loc_%d' % (l + 1)
-                                                                                ))
-                l = n_cnn_loc - 1
-                self.layers_t_localisation[l+1] = tf.reshape(tf.nn.conv2d(self.layers_t_localisation[l], self.filters_t_guider[-1],
-                                             [1, 1, 1, 1], "SAME", name='layer_guider_loc_%d' % (l + 1))
-                                                             , (1, -1)
-                                                             )
-            #
-                self.units_t_localisation = [100, 50, dim]
-                # self.units_t_localisation = [dim]
-                for l in range(n_fc_loc):
-                    self.layers_t_localisation[l + 1 + n_cnn_loc] = tf.contrib.layers.fully_connected(self.layers_t_localisation[l+n_cnn_loc], self.units_t_localisation[l])
+                # _1, bias_tps = get_transformer_init_weights(dim_tps, 'TPS')
+                # _1, bias_affine = get_transformer_init_weights(dim_affine, 'affine')
+                _1, bias_cpab = get_transformer_init_weights(dim_cpab, 'CPAB')
 
-                # add bias for last layer to identity transformation
-                _1, bias = get_transformer_init_weights(self.units_t_localisation[-2], 'TPS')
-                self.layers_t_localisation[-1] = tf.nn.bias_add(self.layers_t_localisation[-1], bias)
+                # self.theta_tps_t = tf.Variable(initial_value=bias_tps, dtype=tf.float32)
+                # self.theta_affine_t = tf.Variable(initial_value=bias_affine, dtype=tf.float32)
+                self.theta_cpab_t = tf.Variable(initial_value=tf.expand_dims(bias_cpab, 0) + 0.001, dtype=tf.float32)
 
-                self.theta_t = self.layers_t_localisation[-1]
-
-                # Transform the guiding image
-                self.hr_guider_t = dtn_transformer_layer(self.hr_guider_t, self.theta_t, self.gi.shape[:2])
 
 
                 # Create grid sampler for guiding image
                 B, H, W, C = (1, self.gi.shape[0], self.gi.shape[1], 3)
                 self.gi_grid = tf.Variable(initial_value=generic_grid_generator(H, W, B))
-                self.gi_grid_inverse = tf.Variable(initial_value=generic_grid_generator(H, W, B))
+                # self.gi_grid_inverse = tf.Variable(initial_value=generic_grid_generator(H, W, B))
                 if self.initial_grid is None:
-                    self.initial_grid = tf.Variable(self.gi_grid)
-
+                    self.initial_grid = tf.Variable(self.gi_grid, trainable=False)
 
                 # Transform matrix for augmenting the grid
                 self.augmentation_mat_grid = tf.placeholder(tf.float32, name='augmentation_mat_grid')
@@ -285,59 +277,43 @@ class ZSSR:
                 # Projective transformation - 8 degrees of freedom
                 self.augmentation_mat_grid.set_shape([8])
 
-                augmented_grid_x = tf.contrib.image.transform(self.gi_grid[0][0], self.augmentation_mat_grid, interpolation='BILINEAR', output_shape=self.augmentation_output_shape)
-                augmented_grid_y = tf.contrib.image.transform(self.gi_grid[0][1], self.augmentation_mat_grid, interpolation='BILINEAR', output_shape=self.augmentation_output_shape)
+                # Use augmented initial grid to augment the guider
+                augmented_grid_x = tf.contrib.image.transform(self.initial_grid[0][0], self.augmentation_mat_grid, interpolation='BILINEAR', output_shape=self.augmentation_output_shape)
+                augmented_grid_y = tf.contrib.image.transform(self.initial_grid[0][1], self.augmentation_mat_grid, interpolation='BILINEAR', output_shape=self.augmentation_output_shape)
                 augmented_grid_t = tf.stack([augmented_grid_x, augmented_grid_y])
                 self.augmented_grid_t = tf.expand_dims(augmented_grid_t, 0)
 
+                    # A shape is needed for the guider for TPS / affine
+                guider_with_shape_t = tf.compat.v1.assign(self.hr_guider_with_shape_t, self.hr_guider_t)
 
-                should_augment_guider = tf.placeholder_with_default(True, shape=(), name='should_augment_guider')
+                # TPS / affine transform
+                self.hr_guider_deformed_t = cpab_layer(guider_with_shape_t, self.theta_cpab_t, self.gi.shape[:2])
+                # guider_with_shape_t =  affine_layer(guider_with_shape_t, self.theta_affine_t, self.gi.shape[:2])
+                # guider_with_shape_t = tps_layer(guider_with_shape_t, self.theta_tps_t, self.gi.shape[:2])
 
-                def get_warped_guider():
-                    return generic_transformer(self.hr_guider_t, self.augmented_grid_t)
+                # per-pixel grid sampling
+                # guider_with_shape_t = generic_transformer(guider_with_shape_t, self.gi_grid)
+                # return guider_with_shape_t
 
-                # sometimes we do the warping outside (like in final_test)
+                self.hr_guider_augmented_t = generic_transformer(self.hr_guider_deformed_t, self.augmented_grid_t)
+
+                def get_deformed_guider():
+                    return self.hr_guider_deformed_t
+
+                def get_augmented_guider():
+                    return self.hr_guider_augmented_t
+
                 def get_original_guider():
                     return self.hr_guider_t
 
-                self.hr_guider_augmented_t = tf.cond(should_augment_guider, get_warped_guider, get_original_guider)
+                # self.hr_guider_deformed_t = guider_with_shape
 
-                # warped_gi = generic_transformer(
-                #         np.expand_dims(self.gi.astype(np.float32), 0), self.gi_grid
-                #         # np.expand_dims(self.gi_per_sf.astype(np.float32), 0), self.gi_grid
-                #     )
+                guider_to_use = tf.cond(should_deform_and_augment_guider, get_augmented_guider, get_original_guider)
 
-                # warped_gi_inverse = generic_transformer(warped_gi, self.gi_grid_inverse)
-
-#                 self.filters_t_guider = [tf.get_variable(shape=meta.filter_shape_guider[ind], name='filter_guider_%d' % ind,
-#                                                          initializer=tf.random_normal_initializer(
-#                                                   stddev=np.sqrt(meta.init_variance/np.prod(
-#                                                       meta.filter_shape_guider[ind][0:3]))
-#                                                          ))
-#                                          for ind in range(meta.depth)]
-
-                # # Define merging layer for the guider image if needed
-                concat_layer = tf.concat(
-                    [self.lr_son_t, self.hr_guider_augmented_t], 3, name ='concat_layer'
+                # Define the concatenation layer
+                concat_layer = tf.compat.v1.concat(
+                    [self.lr_son_t, guider_to_use], 3, name ='concat_layer'
                 )
-
-                # self.layers_t_guider = [self.hr_guider_t] + [None] * meta.depth
-
-                # for l in range(meta.depth - 1):
-                #     self.layers_t_guider[l + 1] = tf.nn.relu(tf.nn.conv2d(self.layers_t_guider[l], self.filters_t_guider[l],
-                #         [1, 1, 1, 1], "SAME", name='layer_%d' % (l + 1)
-                #     ))
-
-                # l = meta.depth - 1
-                # self.layers_t_guider[-1] = tf.nn.conv2d(self.layers_t_guider[l], self.filters_t_guider[l],
-                #     [1, 1, 1, 1], "SAME", name='layer_%d' % (l + 1)
-                # )
-
-                # # Define merging layer for the guider image if needed
-                # concat_layer = tf.concat(
-                #     [self.lr_son_t, self.layers_t_guider[-1]], 3, name ='concat_layer'
-                # )
-
 
             # Define first layer
             first_layer = concat_layer if concat_layer is not None else self.lr_son_t
@@ -365,46 +341,24 @@ class ZSSR:
             # Output image (Add last conv layer result to input, residual learning with global skip connection)
             self.net_output_t = self.layers_t[-1] +  self.conf.learn_residual * self.lr_son_t
 
-
-            # if self.gi is not None:
-            #     self.net_output_t += self.layers_t_guider[-1]
-
             # Final loss (L1 loss between label and output layer)
             self.loss_rec_t = tf.reduce_mean(tf.reshape(tf.abs(self.net_output_t - self.hr_father_t), [-1]))
             self.loss_t = self.loss_rec_t
 
-            # if self.gi is not None:
-                # bad_order_x = tf.reduce_sum(tf.nn.relu(self.gi_grid[:, 0, :, :-1] - self.gi_grid[:, 0, :, 1:]))
-                # bad_order_y = tf.reduce_sum(tf.nn.relu(self.gi_grid[:, 1, :-1, :] - self.gi_grid[:, 1, 1:, :]))
-
-                # tv_distance_x = tf.reduce_sum(tf.abs(warped_gi[:, 1:, :, :] - warped_gi[:, :-1, :, :]))
-                # tv_distance_y = tf.reduce_sum(tf.abs(warped_gi[:, :, 1:, :] - warped_gi[:, :, :-1, :]))
-                # displacements_x = self.gi_grid[0, 0, :, 1:] - self.gi_grid[0, 0, :, :-1]
-                # displacements_y = self.gi_grid[0, 1, 1:, :] - self.gi_grid[0, 1, :-1, :]
-                # tv_distance_x = tf.reduce_sum(tf.abs(displacements_x[:, 1:] - displacements_x[:, :-1]))
-                # tv_distance_y = tf.reduce_sum(tf.abs(displacements_y[1:, :] - displacements_y[:-1, :]))
-
-                # self.loss_tv_guider_t = (tv_distance_x + tv_distance_y)/(H*W*2)
-
-                # self.loss_grid_bad_order_t = (bad_order_x + bad_order_y)/(H*W*2)
-
-                # self.loss_grid_inverse_t = tf.norm(self.gi - warped_gi_inverse, ord=1)/(H*W)
-                # self.loss_grid_inverse_t = tf.norm(self.gi_per_sf - warped_gi_inverse, ord=1)/(H*W)
-
-                # add the grid loss to global loss
-                # self.loss_t += self.conf.grid_coef_bad_order * self.loss_grid_bad_order_t + \
-                #     self.conf.grid_coef_inverse * self.loss_grid_inverse_t + self.conf.coef_tv_guider * self.loss_tv_guider_t
-
             # Apply adam optimizer
-            optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate_t)
-            grid_optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate_grid_t)
-            dtn_optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate_t / 10)
+            optimizer = tf.compat.v1.train.AdamOptimizer(learning_rate=self.learning_rate_t)
+            # grid_optimizer = tf.compat.v1.train.AdamOptimizer(learning_rate=self.learning_rate_t)
+            # affine_optimizer = tf.compat.v1.train.AdamOptimizer(learning_rate=self.learning_rate_t * 10)
+            # tps_optimizer = tf.compat.v1.train.AdamOptimizer(learning_rate=self.learning_rate_t)
+            cpab_optimizer = tf.compat.v1.train.AdamOptimizer(learning_rate=self.learning_rate_t)
 
             self.train_op = optimizer.minimize(self.loss_t, var_list=self.filters_t)
 
             if self.gi is not None:
-                # self.train_grid_op = grid_optimizer.minimize(self.loss_t, var_list=[self.gi_grid, self.gi_grid_inverse])
-                self.train_dtn_op = dtn_optimizer.minimize(self.loss_t, var_list=[var for var in tf.trainable_variables() if var not in self.filters_t])
+                # self.train_grid_op = grid_optimizer.minimize(self.loss_t, var_list=[self.gi_grid])
+                # self.train_affine_op = affine_optimizer.minimize(self.loss_t, var_list=[self.theta_affine_t])
+                # self.train_tps_op = tps_optimizer.minimize(self.loss_t, var_list=[self.theta_tps_t])
+                self.train_cpab_op = cpab_optimizer.minimize(self.loss_t, var_list=[self.theta_cpab_t])
 
             self.init_op = tf.initialize_all_variables()
 
@@ -431,7 +385,7 @@ class ZSSR:
         self.mse, self.mse_rec, self.psnr_rec, self.interp_mse, self.interp_rec_mse, self.mse_steps = [], [], [], [], [], []
         self.iter = 0
         self.learning_rate = self.conf.learning_rate
-        self.learning_rate_grid = self.conf.learning_rate_grid
+        # self.learning_rate_grid = self.conf.learning_rate_grid
         self.learning_rate_change_iter_nums = [0]
 
     def forward_backward_pass(self, lr_son, hr_father, hr_guider, augmentation_mat_grid):
@@ -450,18 +404,18 @@ class ZSSR:
         if hr_guider is not None:
             feed_dict = {
                 'learning_rate:0': self.learning_rate,
-                'learning_rate_grid:0': self.learning_rate_grid,
+                # 'learning_rate_grid:0': self.learning_rate_grid,
                 'lr_son:0': np.expand_dims(interpolated_lr_son, 0),
                 'hr_father:0': np.expand_dims(hr_father, 0),
                 'hr_guider:0': np.expand_dims(hr_guider, 0),
                 'augmentation_mat_grid:0': augmentation_mat_grid,
                 'augmentation_output_shape:0': interpolated_lr_son.shape[:2]
             }
-            # _1, self.loss[self.iter], self.loss_rec[self.iter], self.loss_grid_bad_order[self.iter], self.loss_grid_inverse[self.iter], self.loss_tv_guider[self.iter], train_output, self.augmented_grid = \
-            _1, _2, theta, self.hr_guider, self.loss[self.iter], self.loss_rec[self.iter], train_output, self.augmented_grid = \
+            # theta, _1, _2, _3, self.hr_guider_augmented, self.hr_guider_deformed, self.loss[self.iter], self.loss_rec[self.iter], train_output, self.augmented_grid = \
+            theta, _1, _2, self.hr_guider_augmented, self.hr_guider_deformed, self.loss[self.iter], self.loss_rec[self.iter], train_output, self.augmented_grid = \
                 self.sess.run(
-                    # [self.train_op, self.loss_t, self.loss_rec_t, self.loss_grid_bad_order_t, self.loss_grid_inverse_t, self.loss_tv_guider_t, self.net_output_t, self.augmented_grid_t], feed_dict
-                    [self.train_op, self.train_dtn_op, self.theta_t, self.hr_guider_t, self.loss_t, self.loss_rec_t, self.net_output_t, self.augmented_grid_t], feed_dict
+                    # [self.theta_affine_t, self.train_op, self.train_affine_op, self.train_tps_op, self.hr_guider_augmented_t, self.hr_guider_deformed_t, self.loss_t, self.loss_rec_t, self.net_output_t, self.augmented_grid_t], feed_dict
+                    [self.theta_cpab_t, self.train_op, self.train_cpab_op, self.hr_guider_augmented_t, self.hr_guider_deformed_t, self.loss_t, self.loss_rec_t, self.net_output_t, self.augmented_grid_t], feed_dict
                 )
 
         else:
@@ -477,7 +431,7 @@ class ZSSR:
 
         return np.clip(np.squeeze(train_output), 0, 1)
 
-    def forward_pass(self, lr_son, hr_guider, hr_father_shape=None, augmentation_mat_grid=None, should_augment_guider=True):
+    def forward_pass(self, lr_son, hr_guider, hr_father_shape=None, augmentation_mat_grid=None, should_deform_and_augment_guider=True):
         # First gate for the lr-son into the network is interpolation to the size of the father
         interpolated_lr_son = imresize(lr_son, self.sf, hr_father_shape, self.conf.upscale_method)
 
@@ -489,7 +443,7 @@ class ZSSR:
             # could be 1 ratio (like when running on full size input with full size guider)
             guider_to_im_ratio = np.true_divide(hr_guider.shape[:2], hr_father_shape[:2])
 
-            # if not augmentation sent, only perform downscaling
+            # if no augmentation sent, only perform downscaling
             augmentation_mat_grid = augmentation_mat_grid or np.array([guider_to_im_ratio[0], 0, 0, 0, guider_to_im_ratio[1], 0, 0, 0])
 
             # Create feed dict
@@ -497,7 +451,7 @@ class ZSSR:
                          'hr_guider:0': np.expand_dims(hr_guider, 0) if hr_guider is not None else None,
                          'augmentation_mat_grid:0': augmentation_mat_grid,
                          'augmentation_output_shape:0': interpolated_lr_son.shape[:2],
-                         'should_augment_guider:0': should_augment_guider,
+                         'should_deform_and_augment_guider:0': should_deform_and_augment_guider,
                          }
         else:
             feed_dict = {
@@ -512,9 +466,9 @@ class ZSSR:
         if (not (1 + self.iter) % self.conf.learning_rate_policy_check_every
                 and self.iter - self.learning_rate_change_iter_nums[-1] > self.conf.min_iters):
             # noinspection PyTupleAssignmentBalance
-            [slope, _], [[var, _], _] = np.polyfit(self.mse_steps[-(self.conf.learning_rate_slope_range /
+            [slope, _], [[var, _], _] = np.polyfit(self.mse_steps[-int(self.conf.learning_rate_slope_range /
                                                                     self.conf.run_test_every):],
-                                                   self.mse_rec[-(self.conf.learning_rate_slope_range /
+                                                   self.mse_rec[-int(self.conf.learning_rate_slope_range /
                                                                   self.conf.run_test_every):],
                                                    1, cov=True)
 
@@ -527,7 +481,7 @@ class ZSSR:
             # Determine learning rate maintaining or reduction by the ration between slope and noise
             if -self.conf.learning_rate_change_ratio * slope < std:
                 self.learning_rate /= 10
-                self.learning_rate_grid /= 10
+                # self.learning_rate_grid /= 10
                 print("learning rate updated: ", self.learning_rate)
 
                 # Keep track of learning rate changes for plotting purposes
@@ -589,7 +543,7 @@ class ZSSR:
 
     def train(self):
         # main training loop
-        for self.iter in xrange(self.conf.max_iters):
+        for self.iter in range(self.conf.max_iters):
             # Use augmentation from original input image to create current father.
             # If other scale factors were applied before, their result is also used (hr_fathers_in)
 
@@ -619,7 +573,6 @@ class ZSSR:
 
             # run network forward and back propagation, one iteration (This is the heart of the training)
             self.train_output = self.forward_backward_pass(self.lr_son, self.hr_father, self.hr_guider, chosen_augmentation_grid)
-
             # Display info and save weights
             if not self.iter % self.conf.display_every:
                 print(
@@ -673,22 +626,31 @@ class ZSSR:
 
             return rotated_input, rotated_grid if grid else None
 
+        # deform the guiding image but don't change its size
+        deformed_gi = self.sess.run(
+            [self.hr_guider_deformed_t], {
+                'hr_guider:0': np.expand_dims(self.gi, 0),
+                'augmentation_mat_grid:0': np.array([1, 0, 0, 0, 1, 0, 0, 0]),
+                'augmentation_output_shape:0': self.gi.shape[:2]
+
+            }
+        )[0]
+
         # The weird range means we only do it once if output_flip is disabled
         # We need to check if scale factor is symmetric to all dimensions, if not we will do 180 jumps rather than 90
         for k in range(0, 1 + 7 * self.conf.output_flip, 1 + int(self.sf[0] != self.sf[1])):
 
-            test_input, test_grid = rotate_and_flip(self.input, k, grid=self.gi_grid if self.gi is not None else None)
+            test_input, test_grid = rotate_and_flip(self.input, k, grid=self.initial_grid if self.gi is not None else None)
 
             # I don't know why we need this model line.
             # probably because TF is garbage
             if self.gi is not None:
                 with self.model.as_default():
-                    import ipdb; ipdb.set_trace()
                     augmented_gi = generic_transformer(
-                        self.hr_guider, test_grid
+                        deformed_gi, test_grid
                     ).eval(session=self.sess)[0]
 
-                    # scale to warped_gi to the right sf
+                    # scale to deformed_gi to the right sf
                     augmented_gi = imresize(augmented_gi,
                                         scale_factor=self.sf*self.base_sf/self.conf.scale_factors[-1],
                                         kernel=self.conf.downscale_gt_method)
@@ -698,7 +660,7 @@ class ZSSR:
             tmp_output = self.forward_pass(
                 test_input, augmented_gi if self.gi is not None else None,
                 hr_father_shape=augmented_gi.shape if self.gi is not None else None,
-                should_augment_guider=False # as we just augmented the guider here
+                should_deform_and_augment_guider=False # as we just augmented the guider here
             )
 
             # Undo the rotation for the processed output (mind the opposite order of the flip and the rotation)
@@ -787,6 +749,10 @@ class ZSSR:
 
             self.loss_plot_space.set_xlim([0, self.iter + 1])
             all_losses = np.array(plots_data)
+
+            # convert None values to np.nan
+            all_losses = np.array([[loss or np.nan for loss in losses] for losses in all_losses])
+
             self.loss_plot_space.set_ylim([np.nanmin(all_losses)*0.9, np.nanmax(all_losses)*1.1])
 
         # Mark learning rate changes
@@ -807,9 +773,9 @@ class ZSSR:
             # TODO: show both guider and warped guider?
 
             # show warped guider
-            augmented_guider_t = generic_transformer(self.hr_guider, self.augmented_grid)
-            augmented_guider = augmented_guider_t.eval(session=tf.Session())[0]
-            self.hr_guider_image_space.imshow(augmented_guider, vmin=0.0, vmax=1.0, cmap=self.conf.cmap)
+            # augmented_guider_t = generic_transformer(self.hr_guider, self.augmented_grid)
+            # augmented_guider = augmented_guider_t.eval(session=tf.Session())[0]
+            self.hr_guider_image_space.imshow(self.hr_guider_augmented[0], vmin=0.0, vmax=1.0, cmap=self.conf.cmap)
 
             # print entire grid L1 norm
             guider_grid = self.gi_grid.eval(session=self.sess)
@@ -820,3 +786,45 @@ class ZSSR:
         # These line are needed in order to see the graphics at real time
         self.fig.canvas.draw()
         plt.pause(0.01)
+
+    def create_displacement_map(self):
+        # create identity grid
+        B, H, W = (1, self.gi.shape[0], self.gi.shape[1])
+        identity_grid = generic_grid_generator(H, W, B)
+        identity_grid = np.transpose(identity_grid, [0,2,3,1])
+        zeros = np.zeros((1, H, W, 1))
+        identity_grid = np.concatenate([identity_grid, zeros], 3)
+
+        # scale identity_grid to [0,1]
+        identity_grid += 1
+        identity_grid /= 2
+
+        # deform it with the same transformation
+        deformed_grid = self.sess.run(
+            [self.hr_guider_deformed_t],
+            {
+                'hr_guider:0': identity_grid,
+                'augmentation_mat_grid:0': np.array([1, 0, 0, 0, 1, 0, 0, 0]),
+                'augmentation_output_shape:0': self.gi.shape[:2]
+            }
+        )[0]
+
+        # get the diff
+        # diff_grid = np.abs(deformed_grid - identity_grid)[:,:,:,:2]
+        diff_grid = (deformed_grid - identity_grid)[:,:,:,:2]
+
+        # concatenate zeros for the third axis, we only use the first two (X/Y)
+        displacement_map = np.concatenate([diff_grid, zeros],3)[0]
+
+        # scale the values
+        displacement_map *= 256
+
+        # displacement_map[:,:,0] -= np.min(displacement_map[:,:,0])
+        # displacement_map[:,:,0] /= (np.max(displacement_map[:,:,0]) / 255)
+
+        # scale the Y values to 0-255
+        # displacement_map[:,:,1] -= np.min(displacement_map[:,:,1])
+        # displacement_map[:,:,1] /= (np.max(displacement_map[:,:,1]) / 255)
+
+        return displacement_map
+

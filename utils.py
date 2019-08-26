@@ -1,6 +1,6 @@
 import numpy as np
 from math import pi, sin, cos
-from cv2 import Canny
+# from cv2 import Canny
 from imresize import imresize
 from shutil import copy
 from time import strftime, localtime
@@ -251,7 +251,11 @@ def remove_n_channels_dim(*images):
 
 def normalize_images(*images):
     def _normalize(img):
-        return (img.astype(float) / np.max(img))[:,:,:3] if img is not None else None
+        if img is not None:
+            img = img.astype(float)[:,:,:3]
+            return img
+            # return (img - np.min(img))/np.max(img)
+        return None
 
     # first add n_channels_dim
     images = add_n_channels_dim(*images)
@@ -259,15 +263,15 @@ def normalize_images(*images):
     return tuple(map(_normalize, images))
 
 
-def auto_canny(image, sigma=0.33):
-    # compute the median of the single channel pixel intensities
-    image = (image * 255 if np.max(image) <= 1 else image).astype(np.uint8)
-    v = np.median(image)
+# def auto_canny(image, sigma=0.33):
+#     # compute the median of the single channel pixel intensities
+#     image = (image * 255 if np.max(image) <= 1 else image).astype(np.uint8)
+#     v = np.median(image)
 
-    # apply automatic Canny edge detection using the computed median
-    lower = int(max(0, (1.0 - sigma) * v))
-    upper = int(min(255, (1.0 + sigma) * v))
-    edged = Canny(image, lower, upper)
+#     # apply automatic Canny edge detection using the computed median
+#     lower = int(max(0, (1.0 - sigma) * v))
+#     upper = int(min(255, (1.0 + sigma) * v))
+#     edged = Canny(image, lower, upper)
 
-    # return the edged image
-    return edged
+#     # return the edged image
+#     return edged

@@ -13,8 +13,8 @@ def main(conf_name, gpu):
     if conf_name is None:
         conf = configs.Config()
     else:
-        conf = None
-        exec ('conf = configs.%s' % conf_name)
+        conf =  getattr(configs, conf_name)
+
     res_dir = prepare_result_dir(conf)
     local_dir = os.path.dirname(__file__)
 
