@@ -288,11 +288,6 @@ class ZSSR:
                 augmented_grid_t = tf.stack([augmented_grid_x, augmented_grid_y])
                 self.augmented_grid_t = tf.expand_dims(augmented_grid_t, 0)
 
-                    # A shape is needed for the guider for TPS / affine
-                guider_with_shape_t = tf.compat.v1.assign(self.hr_guider_with_shape_t, self.hr_guider_t)
-
-                # TPS / affine transform
-                self.hr_guider_deformed_t = cpab_layer(guider_with_shape_t, self.theta_cpab_t, self.gi.shape[:2])
                 # guider_with_shape_t =  affine_layer(guider_with_shape_t, self.theta_affine_t, self.gi.shape[:2])
                 # guider_with_shape_t = tps_layer(guider_with_shape_t, self.theta_tps_t, self.gi.shape[:2])
 
@@ -300,24 +295,25 @@ class ZSSR:
                 # guider_with_shape_t = generic_transformer(guider_with_shape_t, self.gi_grid)
                 # return guider_with_shape_t
 
-                self.hr_guider_augmented_t = generic_transformer(self.hr_guider_deformed_t, self.augmented_grid_t)
-
                 def get_deformed_guider():
-                    return self.hr_guider_deformed_t
+                    guider_with_shape_t = tf.compat.v1.assign(self.hr_guider_with_shape_t, self.hr_guider_t)
 
-                def get_augmented_guider():
-                    return self.hr_guider_augmented_t
+                    # TPS / affine transform
+                    return cpab_layer(guider_with_shape_t, self.theta_cpab_t, self.gi.shape[:2])
 
                 def get_original_guider():
                     return self.hr_guider_t
 
-                # self.hr_guider_deformed_t = guider_with_shape
+                self.hr_guider_deformed_t = tf.cond(should_deform_and_augment_guider, get_deformed_guider, get_original_guider)
 
-                guider_to_use = tf.cond(should_deform_and_augment_guider, get_augmented_guider, get_original_guider)
+                def get_augmented_guider():
+                    return generic_transformer(self.hr_guider_deformed_t, self.augmented_grid_t)
+
+                self.hr_guider_augmented_t = tf.cond(should_deform_and_augment_guider, get_augmented_guider, get_original_guider)
 
                 # Define the concatenation layer
                 concat_layer = tf.compat.v1.concat(
-                    [self.lr_son_t, guider_to_use], 3, name ='concat_layer'
+                    [self.lr_son_t, self.hr_guider_augmented_t], 3, name ='concat_layer'
                 )
 
             # Define first layer
