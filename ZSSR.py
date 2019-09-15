@@ -9,6 +9,7 @@ from configs import Config
 from utils import *
 from generic_stn import generic_grid_generator, generic_spatial_transformer_network as generic_transformer
 from ddtn.transformers.transformer_util import get_transformer_layer, get_transformer_dim, get_transformer_init_weights
+from ddtn.transformers.setup_CPAB_transformer import setup_CPAB_transformer
 
 class ZSSR:
     # Basic current state variables initialization / declaration
@@ -245,6 +246,10 @@ class ZSSR:
                 # Learn the TPS / affine parameters
                 # dim_tps = get_transformer_dim('TPS')
                 # dim_affine = get_transformer_dim('affine')
+
+                # TODO: make tessellation size a function of the image size
+                setup_CPAB_transformer(ncx = 4, ncy = 4, override = True)
+
                 dim_cpab = get_transformer_dim('CPAB')
 
                 # tps_layer = get_transformer_layer('TPS')
@@ -350,7 +355,7 @@ class ZSSR:
             # grid_optimizer = tf.compat.v1.train.AdamOptimizer(learning_rate=self.learning_rate_t)
             # affine_optimizer = tf.compat.v1.train.AdamOptimizer(learning_rate=self.learning_rate_t * 10)
             # tps_optimizer = tf.compat.v1.train.AdamOptimizer(learning_rate=self.learning_rate_t)
-            cpab_optimizer = tf.compat.v1.train.AdamOptimizer(learning_rate=self.learning_rate_t)
+            cpab_optimizer = tf.compat.v1.train.AdamOptimizer(learning_rate=self.learning_rate_t * self.conf.learning_rate_cpab_ratio)
 
             self.train_op = optimizer.minimize(self.loss_t, var_list=self.filters_t)
 
@@ -785,7 +790,7 @@ class ZSSR:
 
         # These line are needed in order to see the graphics at real time
         self.fig.canvas.draw()
-        plt.pause(0.01)
+        plt.pause(1)
 
     def create_displacement_map(self):
         # create identity grid
