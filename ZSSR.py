@@ -296,7 +296,7 @@ class ZSSR:
                 # return guider_with_shape_t
 
                 def get_deformed_guider():
-                    guider_with_shape_t = tf.compat.v1.assign(self.hr_guider_with_shape_t, self.hr_guider_t)
+                    guider_with_shape_t = tf.assign(self.hr_guider_with_shape_t, self.hr_guider_t)
 
                     # TPS / affine transform
                     return cpab_layer(guider_with_shape_t, self.theta_cpab_t, self.gi.shape[:2])
@@ -312,7 +312,7 @@ class ZSSR:
                 self.hr_guider_augmented_t = tf.cond(should_deform_and_augment_guider, get_augmented_guider, get_original_guider)
 
                 # Define the concatenation layer
-                concat_layer = tf.compat.v1.concat(
+                concat_layer = tf.concat(
                     [self.lr_son_t, self.hr_guider_augmented_t], 3, name ='concat_layer'
                 )
 
@@ -325,8 +325,6 @@ class ZSSR:
                                                   stddev=np.sqrt(meta.init_variance/np.prod(
                                                       meta.filter_shape[ind][0:3]))))
                               for ind in range(meta.depth)]
-
-
 
             # Define layers
             self.layers_t = [first_layer] + [None] * meta.depth
@@ -347,11 +345,11 @@ class ZSSR:
             self.loss_t = self.loss_rec_t
 
             # Apply adam optimizer
-            optimizer = tf.compat.v1.train.AdamOptimizer(learning_rate=self.learning_rate_t)
+            optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate_t)
             # grid_optimizer = tf.compat.v1.train.AdamOptimizer(learning_rate=self.learning_rate_t)
             # affine_optimizer = tf.compat.v1.train.AdamOptimizer(learning_rate=self.learning_rate_t * 10)
             # tps_optimizer = tf.compat.v1.train.AdamOptimizer(learning_rate=self.learning_rate_t)
-            cpab_optimizer = tf.compat.v1.train.AdamOptimizer(learning_rate=self.learning_rate_t * self.conf.learning_rate_cpab_ratio)
+            cpab_optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate_t * self.conf.learning_rate_cpab_ratio)
 
             self.train_op = optimizer.minimize(self.loss_t, var_list=self.filters_t)
 
