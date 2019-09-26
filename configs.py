@@ -65,7 +65,7 @@ class Config:
     cpab_tessalation_ncy = 2
 
     def __init__(self, input_filter_depth=3, output_filter_depth=3,
-                 guider_filter_depth=3,
+                 guider_filter_depth=3, guider_output_filter_depth=3,
                  width=64, depth=8):
         self.width = width
         self.depth = depth
@@ -75,7 +75,7 @@ class Config:
                              [[3, 3, self.width, output_filter_depth]])
         self.filter_shape_guider = ([[3, 3, guider_filter_depth, self.width]] +
                              [[3, 3, self.width, self.width]] * (self.depth-2) +
-                             [[3, 3, self.width, guider_filter_depth]])
+                             [[3, 3, self.width, guider_output_filter_depth]])
 
 
 ########################################
@@ -88,7 +88,7 @@ X2_ONE_JUMP_IDEAL_CONF = Config()
 X2_ONE_JUMP_IDEAL_CONF.input_path = os.path.dirname(__file__) + '/set14'
 
 # [GUY]
-THERMAL_IMAGES_CONF = Config(input_filter_depth=6, output_filter_depth=1)
+THERMAL_IMAGES_CONF = Config(input_filter_depth=3, output_filter_depth=1)
 THERMAL_IMAGES_CONF.plot_losses = True
 THERMAL_IMAGES_CONF.crop_size = 64
 THERMAL_IMAGES_CONF.max_iters = 800
@@ -114,8 +114,9 @@ THERMAL_IMAGES_CONF.cpab_tessalation_ncy = 2
 # THERMAL_IMAGES_CONF.noise_std = 0.05  # adding noise to lr-sons. small for real images, bigger for noisy images and zero for ideal case
 
 # [GUY]
-DEPTH_MAPS_CONF = Config(input_filter_depth=4,
-                         output_filter_depth=1)
+DEPTH_MAPS_CONF = Config(input_filter_depth=1,
+                         output_filter_depth=1,
+                         guider_output_filter_depth=1)
 DEPTH_MAPS_CONF.input_path = os.path.dirname(__file__) + '/vase'
 DEPTH_MAPS_CONF.img_ext = 'png'
 DEPTH_MAPS_CONF.guiding_img_ext = 'png'
