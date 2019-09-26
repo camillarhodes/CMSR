@@ -67,6 +67,7 @@ class ZSSR:
     # gi_grid_inverse = None
     initial_grid = None
     filters_t = None
+    filters_t_guider = None
     layers_t = None
     layers_t_guider = None
     layers_t_localisation = None
@@ -314,6 +315,26 @@ class ZSSR:
                 concat_layer = tf.concat(
                     [self.lr_son_t, self.hr_guider_augmented_t], 3, name ='concat_layer'
                 )
+                concat_layer = None
+
+                self.filters_t_guider = [tf.get_variable(shape=meta.filter_shape_guider[ind], name='filter_guider_%d' % ind,
+                                              initializer=tf.random_normal_initializer(
+                                                  stddev=np.sqrt(meta.init_variance/np.prod(
+                                                      meta.filter_shape_guider[ind][0:3]))))
+                              for ind in range(meta.depth)]
+
+                # Define guider layers
+                self.layers_t_guider = [self.hr_guider_augmented_t] + [None] * meta.depth
+
+                for l in range(meta.depth - 1):
+                    self.layers_t_guider[l + 1] = tf.nn.relu(tf.nn.conv2d(self.layers_t_guider[l], self.filters_t_guider[l],
+                                                               [1, 1, 1, 1], "SAME", name='layer_guider_%d' % (l + 1)))
+                # Last conv layer (Separate because no ReLU here)
+                l = meta.depth - 1
+
+                self.layers_t_guider[-1] = tf.nn.conv2d(self.layers_t_guider[l], self.filters_t_guider[l],
+                                             [1, 1, 1, 1], "SAME", name='layer_guider_%d' % (l + 1))
+
 
             # Define first layer
             first_layer = concat_layer if concat_layer is not None else self.lr_son_t
@@ -337,7 +358,7 @@ class ZSSR:
             self.layers_t[-1] = tf.nn.conv2d(self.layers_t[l], self.filters_t[l],
                                              [1, 1, 1, 1], "SAME", name='layer_%d' % (l + 1))
             # Output image (Add last conv layer result to input, residual learning with global skip connection)
-            self.net_output_t = self.layers_t[-1] +  self.conf.learn_residual * self.lr_son_t
+            self.net_output_t = self.layers_t[-1] +  self.conf.learn_residual * self.lr_son_t + self.layers_t_guider[-1]
 
             # Final loss (L1 loss between label and output layer)
             self.loss_rec_t = tf.reduce_mean(tf.reshape(tf.abs(self.net_output_t - self.hr_father_t), [-1]))
