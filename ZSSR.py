@@ -247,8 +247,7 @@ class ZSSR:
                 # dim_tps = get_transformer_dim('TPS')
                 # dim_affine = get_transformer_dim('affine')
 
-                # TODO: make tessellation size a function of the image size
-                setup_CPAB_transformer(ncx = 4, ncy = 4, override = True)
+                setup_CPAB_transformer(ncx=self.conf.cpab_tessalation_ncx, ncy=self.conf.cpab_tessalation_ncy, override = True)
 
                 dim_cpab = get_transformer_dim('CPAB')
 

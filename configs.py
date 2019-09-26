@@ -61,6 +61,8 @@ class Config:
 
     # params related to deformation
     learning_rate_cpab_ratio = 1.0 # ratio between lr and deformation lr
+    cpab_tessalation_ncx = 2
+    cpab_tessalation_ncy = 2
 
     def __init__(self, input_filter_depth=3, output_filter_depth=3,
                  guider_filter_depth=3,
@@ -104,6 +106,9 @@ THERMAL_IMAGES_CONF.guiding_img_ext = 'png'
 # THERMAL_IMAGES_CONF.back_projection_iters = [6, 6]
 THERMAL_IMAGES_CONF.scale_factors = [[4.0, 4.0]]  # list of pairs (vertical, horizontal) for gradual increments in resolution
 THERMAL_IMAGES_CONF.learning_rate_cpab_ratio = 10.0
+THERMAL_IMAGES_CONF.cpab_tessalation_ncx = 2
+THERMAL_IMAGES_CONF.cpab_tessalation_ncy = 2
+
 # THERMAL_IMAGES_CONF.scale_factors = [[1.0, 1.5], [1.5, 1.0], [1.5, 1.5], [1.5, 2.0], [2.0, 1.5], [2.0, 2.0]]
 # THERMAL_IMAGES_CONF.back_projection_iters = [6, 6, 8, 10, 10, 12]
 # THERMAL_IMAGES_CONF.noise_std = 0.05  # adding noise to lr-sons. small for real images, bigger for noisy images and zero for ideal case
