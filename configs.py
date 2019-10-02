@@ -61,6 +61,7 @@ class Config:
 
     # params related to deformation
     learning_rate_cpab_ratio = 1.0 # ratio between lr and deformation lr
+    learning_rate_affine_ratio = 1.0 # ratio between lr and deformation lr
     cpab_tessalation_ncx = 2
     cpab_tessalation_ncy = 2
 
@@ -107,7 +108,8 @@ THERMAL_IMAGES_CONF.guiding_img_ext = 'png'
 #THERMAL_IMAGES_CONF.scale_factors = [[2.0, 2.0], [4.0, 4.0]]  # list of pairs (vertical, horizontal) for gradual increments in resolution
 # THERMAL_IMAGES_CONF.back_projection_iters = [6, 6]
 THERMAL_IMAGES_CONF.scale_factors = [[4.0, 4.0]]  # list of pairs (vertical, horizontal) for gradual increments in resolution
-THERMAL_IMAGES_CONF.learning_rate_cpab_ratio = 100.0
+THERMAL_IMAGES_CONF.learning_rate_cpab_ratio = 10.0
+THERMAL_IMAGES_CONF.learning_rate_affine_ratio = 100.0
 THERMAL_IMAGES_CONF.cpab_tessalation_ncx = 2
 THERMAL_IMAGES_CONF.cpab_tessalation_ncy = 2
 
