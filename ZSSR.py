@@ -78,11 +78,12 @@ class ZSSR:
     loss_grid_inverse_t = None
     loss_tv_guider_t = None
     theta_cpab_t = None
+    theta_affine_t = None
     train_op = None
     train_grid_op = None
-    train_affine_op = None
-    train_tps_op = None
-    train_cpab_op = None
+    # train_affine_op = None
+    # train_tps_op = None
+    train_transformation_op = None
     init_op = None
 
     # Parameters related to plotting and graphics
@@ -230,7 +231,7 @@ class ZSSR:
 
                 # Guider image with shape, needed for TPS / affine
                 # transformations
-                self.hr_guider_with_shape_t = tf.Variable(np.zeros((1, ) + self.gi.shape[0:2] + (1,)), dtype=np.float32, trainable=False)
+                self.hr_guider_with_shape_t = tf.Variable(np.zeros((1, ) + add_n_channels_dim(self.gi)[0].shape), dtype=np.float32, trainable=False)
 
 
             # Input image
@@ -243,43 +244,25 @@ class ZSSR:
             concat_layer = None
 
             if self.gi is not None:
-                self.filters_t_guider = [tf.get_variable(shape=meta.filter_shape_guider[ind], name='filter_guider_%d' % ind,
-                                              initializer=tf.random_normal_initializer(
-                                                  stddev=np.sqrt(meta.init_variance/np.prod(
-                                                      meta.filter_shape_guider[ind][0:3]))))
-                              for ind in range(meta.depth)]
-
-                # Define guider layers
-                self.layers_t_guider = [self.hr_guider_t] + [None] * meta.depth
-
-                for l in range(meta.depth - 1):
-                    self.layers_t_guider[l + 1] = tf.nn.relu(tf.nn.conv2d(self.layers_t_guider[l], self.filters_t_guider[l],
-                                                               [1, 1, 1, 1], "SAME", name='layer_guider_%d' % (l + 1)))
-                # Last conv layer (Separate because no ReLU here)
-                l = meta.depth - 1
-
-                self.layers_t_guider[-1] = tf.nn.conv2d(self.layers_t_guider[l], self.filters_t_guider[l],
-                                             [1, 1, 1, 1], "SAME", name='layer_guider_%d' % (l + 1))
-
 
                 # Learn the TPS / affine parameters
                 # dim_tps = get_transformer_dim('TPS')
-                # dim_affine = get_transformer_dim('affine')
+                dim_affine = get_transformer_dim('affine')
 
                 setup_CPAB_transformer(ncx=self.conf.cpab_tessalation_ncx, ncy=self.conf.cpab_tessalation_ncy, override = True)
 
                 dim_cpab = get_transformer_dim('CPAB')
 
                 # tps_layer = get_transformer_layer('TPS')
-                # affine_layer = get_transformer_layer('affine')
+                affine_layer = get_transformer_layer('affine')
                 cpab_layer = get_transformer_layer('CPAB')
 
                 # _1, bias_tps = get_transformer_init_weights(dim_tps, 'TPS')
-                # _1, bias_affine = get_transformer_init_weights(dim_affine, 'affine')
+                _1, bias_affine = get_transformer_init_weights(dim_affine, 'affine')
                 _1, bias_cpab = get_transformer_init_weights(dim_cpab, 'CPAB')
 
                 # self.theta_tps_t = tf.Variable(initial_value=bias_tps, dtype=tf.float32)
-                # self.theta_affine_t = tf.Variable(initial_value=bias_affine, dtype=tf.float32)
+                self.theta_affine_t = tf.Variable(initial_value=bias_affine, dtype=tf.float32)
                 self.theta_cpab_t = tf.Variable(initial_value=tf.expand_dims(bias_cpab, 0) + 0.001, dtype=tf.float32)
 
 
@@ -314,10 +297,14 @@ class ZSSR:
                 # return guider_with_shape_t
 
                 def get_deformed_guider():
-                    guider_with_shape_t = tf.assign(self.hr_guider_with_shape_t, self.layers_t_guider[-1])
+                    guider_with_shape_t = tf.assign(self.hr_guider_with_shape_t, self.hr_guider_t)
 
                     # TPS / affine transform
-                    return cpab_layer(guider_with_shape_t, self.theta_cpab_t, self.gi.shape[:2])
+                    return cpab_layer(
+                        affine_layer(
+                            guider_with_shape_t, self.theta_affine_t, self.gi.shape[:2]
+                        ), self.theta_cpab_t, self.gi.shape[:2]
+                    )
 
                 def get_original_guider():
                     return self.hr_guider_t
@@ -334,6 +321,24 @@ class ZSSR:
                     [self.lr_son_t, self.hr_guider_augmented_t], 3, name ='concat_layer'
                 )
                 concat_layer = None
+
+                self.filters_t_guider = [tf.get_variable(shape=meta.filter_shape_guider[ind], name='filter_guider_%d' % ind,
+                                              initializer=tf.random_normal_initializer(
+                                                  stddev=np.sqrt(meta.init_variance/np.prod(
+                                                      meta.filter_shape_guider[ind][0:3]))))
+                              for ind in range(meta.depth_guider)]
+
+                # Define guider layers
+                self.layers_t_guider = [self.hr_guider_augmented_t] + [None] * meta.depth_guider
+
+                for l in range(meta.depth_guider - 1):
+                    self.layers_t_guider[l + 1] = tf.nn.relu(tf.nn.conv2d(self.layers_t_guider[l], self.filters_t_guider[l],
+                                                               [1, 1, 1, 1], "SAME", name='layer_guider_%d' % (l + 1)))
+                # Last conv layer (Separate because no ReLU here)
+                l = meta.depth_guider - 1
+
+                self.layers_t_guider[l+1] = tf.nn.conv2d(self.layers_t_guider[l], self.filters_t_guider[l],
+                                             [1, 1, 1, 1], "SAME", name='layer_guider_%d' % (l + 1))
 
 
             # Define first layer
@@ -358,7 +363,7 @@ class ZSSR:
             self.layers_t[-1] = tf.nn.conv2d(self.layers_t[l], self.filters_t[l],
                                              [1, 1, 1, 1], "SAME", name='layer_%d' % (l + 1))
             # Output image (Add last conv layer result to input, residual learning with global skip connection)
-            self.net_output_t = self.layers_t[-1] +  self.conf.learn_residual * self.lr_son_t + self.hr_guider_augmented_t
+            self.net_output_t = self.layers_t[-1] +  self.conf.learn_residual * self.lr_son_t + self.layers_t_guider[-1]
 
             # Final loss (L1 loss between label and output layer)
             self.loss_rec_t = tf.reduce_mean(tf.reshape(tf.abs(self.net_output_t - self.hr_father_t), [-1]))
@@ -377,7 +382,7 @@ class ZSSR:
                 # self.train_grid_op = grid_optimizer.minimize(self.loss_t, var_list=[self.gi_grid])
                 # self.train_affine_op = affine_optimizer.minimize(self.loss_t, var_list=[self.theta_affine_t])
                 # self.train_tps_op = tps_optimizer.minimize(self.loss_t, var_list=[self.theta_tps_t])
-                self.train_cpab_op = cpab_optimizer.minimize(self.loss_t, var_list=[self.theta_cpab_t])
+                self.train_transformation_op = cpab_optimizer.minimize(self.loss_t, var_list=[self.theta_cpab_t, self.theta_affine_t])
 
             self.init_op = tf.initialize_all_variables()
 
@@ -431,10 +436,10 @@ class ZSSR:
                 'augmentation_output_shape:0': interpolated_lr_son.shape[:2]
             }
             # theta, _1, _2, _3, self.hr_guider_augmented, self.hr_guider_deformed, self.loss[self.iter], self.loss_rec[self.iter], train_output, self.augmented_grid = \
-            theta, _1, _2, self.hr_guider_augmented, self.hr_guider_deformed, self.loss[self.iter], self.loss_rec[self.iter], train_output, self.augmented_grid = \
+            x, _1, _2, self.hr_guider_augmented, self.hr_guider_deformed, self.loss[self.iter], self.loss_rec[self.iter], train_output, self.augmented_grid = \
                 self.sess.run(
                     # [self.theta_affine_t, self.train_op, self.train_affine_op, self.train_tps_op, self.hr_guider_augmented_t, self.hr_guider_deformed_t, self.loss_t, self.loss_rec_t, self.net_output_t, self.augmented_grid_t], feed_dict
-                    [self.theta_cpab_t, self.train_op, self.train_cpab_op, self.hr_guider_augmented_t, self.hr_guider_deformed_t, self.loss_t, self.loss_rec_t, self.net_output_t, self.augmented_grid_t], feed_dict
+                    [self.layers_t_guider[-1], self.train_op, self.train_transformation_op, self.hr_guider_augmented_t, self.hr_guider_deformed_t, self.loss_t, self.loss_rec_t, self.net_output_t, self.augmented_grid_t], feed_dict
                 )
 
         else:
@@ -794,7 +799,7 @@ class ZSSR:
             # show warped guider
             # augmented_guider_t = generic_transformer(self.hr_guider, self.augmented_grid)
             # augmented_guider = augmented_guider_t.eval(session=tf.Session())[0]
-            self.hr_guider_image_space.imshow(self.hr_guider_augmented[0,:,:,0], vmin=0.0, vmax=1.0, cmap=self.conf.cmap)
+            self.hr_guider_image_space.imshow(self.hr_guider_augmented[0], vmin=0.0, vmax=1.0, cmap=self.conf.cmap)
 
             # print entire grid L1 norm
             guider_grid = self.gi_grid.eval(session=self.sess)

@@ -66,15 +66,16 @@ class Config:
 
     def __init__(self, input_filter_depth=3, output_filter_depth=3,
                  guider_filter_depth=3, guider_output_filter_depth=3,
-                 width=64, depth=8):
+                 width=64, depth=8, depth_guider=8):
         self.width = width
         self.depth = depth
+        self.depth_guider = depth_guider
         # network meta params that by default are determined (by other params) by other params but can be changed
         self.filter_shape = ([[3, 3, input_filter_depth, self.width]] +
                              [[3, 3, self.width, self.width]] * (self.depth-2) +
                              [[3, 3, self.width, output_filter_depth]])
         self.filter_shape_guider = ([[3, 3, guider_filter_depth, self.width]] +
-                             [[3, 3, self.width, self.width]] * (self.depth-2) +
+                             [[3, 3, self.width, self.width]] * (self.depth_guider-2) +
                              [[3, 3, self.width, guider_output_filter_depth]])
 
 
@@ -88,12 +89,10 @@ X2_ONE_JUMP_IDEAL_CONF = Config()
 X2_ONE_JUMP_IDEAL_CONF.input_path = os.path.dirname(__file__) + '/set14'
 
 # [GUY]
-THERMAL_IMAGES_CONF = Config(input_filter_depth=1,
-                             output_filter_depth=1,
-                             guider_output_filter_depth=1
-                             )
+THERMAL_IMAGES_CONF = Config(input_filter_depth=1, output_filter_depth=1, guider_output_filter_depth=1,
+                             depth_guider=2)
 THERMAL_IMAGES_CONF.plot_losses = True
-THERMAL_IMAGES_CONF.crop_size = 96
+THERMAL_IMAGES_CONF.crop_size = 64
 THERMAL_IMAGES_CONF.max_iters = 800
 THERMAL_IMAGES_CONF.run_test_every = 20
 THERMAL_IMAGES_CONF.display_every = 1
@@ -107,11 +106,10 @@ THERMAL_IMAGES_CONF.img_ext = 'png'
 THERMAL_IMAGES_CONF.guiding_img_ext = 'png'
 #THERMAL_IMAGES_CONF.scale_factors = [[2.0, 2.0], [4.0, 4.0]]  # list of pairs (vertical, horizontal) for gradual increments in resolution
 # THERMAL_IMAGES_CONF.back_projection_iters = [6, 6]
-THERMAL_IMAGES_CONF.scale_factors = [[2.0, 2.0]]  # list of pairs (vertical, horizontal) for gradual increments in resolution
-THERMAL_IMAGES_CONF.learning_rate_cpab_ratio = 1000.0
-THERMAL_IMAGES_CONF.cpab_tessalation_ncx = 4
-THERMAL_IMAGES_CONF.cpab_tessalation_ncy = 4
-
+THERMAL_IMAGES_CONF.scale_factors = [[4.0, 4.0]]  # list of pairs (vertical, horizontal) for gradual increments in resolution
+THERMAL_IMAGES_CONF.learning_rate_cpab_ratio = 100.0
+THERMAL_IMAGES_CONF.cpab_tessalation_ncx = 2
+THERMAL_IMAGES_CONF.cpab_tessalation_ncy = 2
 
 # THERMAL_IMAGES_CONF.scale_factors = [[1.0, 1.5], [1.5, 1.0], [1.5, 1.5], [1.5, 2.0], [2.0, 1.5], [2.0, 2.0]]
 # THERMAL_IMAGES_CONF.back_projection_iters = [6, 6, 8, 10, 10, 12]
