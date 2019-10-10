@@ -91,7 +91,7 @@ X2_ONE_JUMP_IDEAL_CONF = Config()
 X2_ONE_JUMP_IDEAL_CONF.input_path = os.path.dirname(__file__) + '/set14'
 
 # [GUY]
-THERMAL_IMAGES_CONF = Config(input_filter_depth=6, output_filter_depth=3, guider_output_filter_depth=3,
+THERMAL_IMAGES_CONF = Config(input_filter_depth=4, output_filter_depth=1, guider_output_filter_depth=3,
                              depth_guider=3)
 THERMAL_IMAGES_CONF.plot_losses = True
 THERMAL_IMAGES_CONF.crop_size = 64
@@ -103,18 +103,18 @@ THERMAL_IMAGES_CONF.display_every = 1
 # THERMAL_IMAGES_CONF.img_ext = 'tiff'
 # THERMAL_IMAGES_CONF.guiding_img_ext = 'jpg'
 # THERMAL_IMAGES_CONF.scale_factors = [[5.0, 5.0]]
-THERMAL_IMAGES_CONF.input_path = os.path.dirname(__file__) + '/ULB17-VT/111'
+THERMAL_IMAGES_CONF.input_path = os.path.dirname(__file__) + '/Maagad_reg2'
 THERMAL_IMAGES_CONF.img_ext = 'png'
 THERMAL_IMAGES_CONF.guiding_img_ext = 'png'
-THERMAL_IMAGES_CONF.scale_factors = [[2.0, 2.0], [4.0, 4.0]]  # list of pairs (vertical, horizontal) for gradual increments in resolution
-THERMAL_IMAGES_CONF.back_projection_iters = [6, 6]
-THERMAL_IMAGES_CONF.base_change_sfs = [[2.0, 2.0]]  # list of pairs (vertical, horizontal) for gradual increments in resolution
-#THERMAL_IMAGES_CONF.scale_factors = [[4.0, 4.0]]  # list of pairs (vertical, horizontal) for gradual increments in resolution
-#THERMAL_IMAGES_CONF.learning_rate_cpab_ratio = 100.0
-# THERMAL_IMAGES_CONF.learning_rate_affine_ratio = 1.0
-# THERMAL_IMAGES_CONF.learning_rate_tps_ratio = 1.0
-# THERMAL_IMAGES_CONF.cpab_tessalation_ncx = 4
-# THERMAL_IMAGES_CONF.cpab_tessalation_ncy = 4
+# THERMAL_IMAGES_CONF.scale_factors = [[4.0, 4.0], [2.0, 2.0], [4.0, 4.0]]  # list of pairs (vertical, horizontal) for gradual increments in resolution
+# THERMAL_IMAGES_CONF.back_projection_iters = [10, 10, 10]
+# #THERMAL_IMAGES_CONF.base_change_sfs = [[2.0, 2.0]]  # list of pairs (vertical, horizontal) for gradual increments in resolution
+THERMAL_IMAGES_CONF.scale_factors = [[4.0, 4.0]]  # list of pairs (vertical, horizontal) for gradual increments in resolution
+THERMAL_IMAGES_CONF.learning_rate_cpab_ratio = 10.0
+THERMAL_IMAGES_CONF.learning_rate_affine_ratio = 10.0
+THERMAL_IMAGES_CONF.learning_rate_tps_ratio = 10.0
+THERMAL_IMAGES_CONF.cpab_tessalation_ncx = 4
+THERMAL_IMAGES_CONF.cpab_tessalation_ncy = 4
 
 # THERMAL_IMAGES_CONF.scale_factors = [[1.0, 1.5], [1.5, 1.0], [1.5, 1.5], [1.5, 2.0], [2.0, 1.5], [2.0, 2.0]]
 # THERMAL_IMAGES_CONF.back_projection_iters = [6, 6, 8, 10, 10, 12]

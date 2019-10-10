@@ -302,13 +302,13 @@ class ZSSR:
 
                     # TPS / affine transform
                     return tps_layer(
-				cpab_layer(
-                        		affine_layer(
-                            			guider_with_shape_t, self.theta_affine_t, self.gi.shape[:2]
-                        		),
-				 	self.theta_cpab_t, self.gi.shape[:2]
-				),
-				self.theta_tps_t, self.gi.shape[:2]
+                        cpab_layer(
+                            affine_layer(
+                                guider_with_shape_t, self.theta_affine_t, self.gi.shape[:2]
+                            ),
+                            self.theta_cpab_t, self.gi.shape[:2]
+                        ),
+                        self.theta_tps_t, self.gi.shape[:2]
                     )
 
                 def get_original_guider():
@@ -327,23 +327,23 @@ class ZSSR:
                 )
                 #concat_layer = None
 
-                self.filters_t_guider = [tf.get_variable(shape=meta.filter_shape_guider[ind], name='filter_guider_%d' % ind,
-                                              initializer=tf.random_normal_initializer(
-                                                  stddev=np.sqrt(meta.init_variance/np.prod(
-                                                      meta.filter_shape_guider[ind][0:3]))))
-                              for ind in range(meta.depth_guider)]
+#                 self.filters_t_guider = [tf.get_variable(shape=meta.filter_shape_guider[ind], name='filter_guider_%d' % ind,
+#                                               initializer=tf.random_normal_initializer(
+#                                                   stddev=np.sqrt(meta.init_variance/np.prod(
+#                                                       meta.filter_shape_guider[ind][0:3]))))
+#                               for ind in range(meta.depth_guider)]
 
-                # Define guider layers
-                self.layers_t_guider = [self.hr_guider_augmented_t] + [None] * meta.depth_guider
+#                 # Define guider layers
+#                 self.layers_t_guider = [self.hr_guider_augmented_t] + [None] * meta.depth_guider
 
-                for l in range(meta.depth_guider - 1):
-                    self.layers_t_guider[l + 1] = tf.nn.relu(tf.nn.conv2d(self.layers_t_guider[l], self.filters_t_guider[l],
-                                                               [1, 1, 1, 1], "SAME", name='layer_guider_%d' % (l + 1)))
-                # Last conv layer (Separate because no ReLU here)
-                l = meta.depth_guider - 1
+#                 for l in range(meta.depth_guider - 1):
+#                     self.layers_t_guider[l + 1] = tf.nn.relu(tf.nn.conv2d(self.layers_t_guider[l], self.filters_t_guider[l],
+#                                                                [1, 1, 1, 1], "SAME", name='layer_guider_%d' % (l + 1)))
+#                 # Last conv layer (Separate because no ReLU here)
+#                 l = meta.depth_guider - 1
 
-                self.layers_t_guider[l+1] = tf.nn.conv2d(self.layers_t_guider[l], self.filters_t_guider[l],
-                                             [1, 1, 1, 1], "SAME", name='layer_guider_%d' % (l + 1))
+#                 self.layers_t_guider[l+1] = tf.nn.conv2d(self.layers_t_guider[l], self.filters_t_guider[l],
+#                                              [1, 1, 1, 1], "SAME", name='layer_guider_%d' % (l + 1))
 
 
             # Define first layer
@@ -442,10 +442,10 @@ class ZSSR:
                 'augmentation_output_shape:0': interpolated_lr_son.shape[:2]
             }
             # theta, _1, _2, _3, self.hr_guider_augmented, self.hr_guider_deformed, self.loss[self.iter], self.loss_rec[self.iter], train_output, self.augmented_grid = \
-            x, _1, _2, _3, _4, self.hr_guider_augmented, self.hr_guider_deformed, self.loss[self.iter], self.loss_rec[self.iter], train_output, self.augmented_grid = \
+            _1, _2, _3, _4, self.hr_guider_augmented, self.hr_guider_deformed, self.loss[self.iter], self.loss_rec[self.iter], train_output, self.augmented_grid = \
                 self.sess.run(
                     # [self.theta_affine_t, self.train_op, self.train_affine_op, self.train_tps_op, self.hr_guider_augmented_t, self.hr_guider_deformed_t, self.loss_t, self.loss_rec_t, self.net_output_t, self.augmented_grid_t], feed_dict
-                    [self.layers_t_guider[-1], self.train_op, self.train_tps_op, self.train_affine_op, self.train_cpab_op, self.hr_guider_augmented_t, self.hr_guider_deformed_t, self.loss_t, self.loss_rec_t, self.net_output_t, self.augmented_grid_t], feed_dict
+                    [self.train_op, self.train_tps_op, self.train_affine_op, self.train_cpab_op, self.hr_guider_augmented_t, self.hr_guider_deformed_t, self.loss_t, self.loss_rec_t, self.net_output_t, self.augmented_grid_t], feed_dict
                 )
 
         else:
