@@ -167,7 +167,7 @@ class ZSSR:
             # This only happens if there exists ground-truth and sf is not the last one (or too close to it).
             # We use imresize with both scale and output-size, see comment in forward_backward_pass.
             # noinspection PyTypeChecker
-            self.gt_per_sf = (imresize(self.gt,
+            self.gt_per_sf,  = normalize_images((imresize(self.gt,
                                        scale_factor=self.sf / self.conf.scale_factors[-1] if self.output_shape is None else None,
                                        output_shape=self.output_shape,
                                        kernel=self.conf.downscale_gt_method)
@@ -175,7 +175,7 @@ class ZSSR:
                                   self.sf is not None)
                               # self.sf is not None and
                               # np.any(np.abs(self.sf - self.conf.scale_factors[-1]) > 0.01))
-                              else self.gt)
+                              else self.gt))
 
 
             # Initialize network weights and meta parameters

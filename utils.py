@@ -20,7 +20,8 @@ def random_augment(ims,
                    allow_rotation=True,
                    scale_diff_sigma=0.01,
                    shear_sigma=0.01,
-                   crop_size=128):
+                   crop_size=128,
+                   crop_size_guider=256):
     """Takes a random crop of the image and the guiding image.
     Returns:
         1. the image chosen randomly from `ims` list
@@ -74,6 +75,15 @@ def random_augment(ims,
                                        [0, 1, im.shape[0] / 2.0],
                                        [0, 0, 1]])
 
+    shift_to_center_mat_guider = np.array([[1, 0, - guiding_im_shape[1] / 2.0],
+                                    [0, 1, - guiding_im_shape[0] / 2.0],
+                                    [0, 0, 1]])
+
+    shift_back_from_center_guider = np.array([[1, 0, guiding_im_shape[1] / 2.0],
+                                       [0, 1, guiding_im_shape[0] / 2.0],
+                                       [0, 0, 1]])
+
+
     # Keeping the transform interpolation free means only shifting by integers
     if mode != 'affine':
         shift_to_center_mat = np.round(shift_to_center_mat)
@@ -103,6 +113,12 @@ def random_augment(ims,
     shift_mat = np.array([[1, 0, - shift_x],
                           [0, 1, - shift_y],
                           [0, 0, 1]])
+    shift_x_guider = np.random.rand() * np.clip(scale * guiding_im_shape[1] - crop_size_guider, 0, 9999)
+    shift_y_guider = np.random.rand() * np.clip(scale * guiding_im_shape[0] - crop_size_guider, 0, 9999)
+    shift_mat_guider = np.array([[1, 0, - shift_x_guider],
+                          [0, 1, - shift_y_guider],
+                          [0, 0, 1]])
+
 
     # Keeping the transform interpolation free means only shifting by integers
     if mode != 'affine':
@@ -142,15 +158,23 @@ def random_augment(ims,
                      .dot(shift_to_center_mat))
 
     if guiding_im_shape:
-        guider_to_im_ratio = np.true_divide(guiding_im_shape, im.shape)[:2]
+        # guider_to_im_ratio = np.true_divide(guiding_im_shape, im.shape)[:2]
 
         # first scale the guider/grid to the size of the image
-        scale_guider_mat = np.array([[1.0 / guider_to_im_ratio[0], 0, 0],
-                                     [0, 1.0 / guider_to_im_ratio[1], 0],
-                                     [0, 0, 1]])
+        # scale_im_mat = np.array([[guider_to_im_ratio[0], 0, 0],
+        #                              [0, guider_to_im_ratio[1], 0],
+        #                              [0, 0, 1]])
+
+        augmentation_mat_guider = (shift_back_from_center_guider
+                                .dot(shift_mat_guider)
+                                .dot(shear_mat)
+                                .dot(rotation_mat)
+                                .dot(scale_mat)
+                                .dot(shift_to_center_mat_guider))
 
         # then perform the same augmentation
-        augmentation_mat_guider = augmentation_mat.dot(scale_guider_mat)
+        # augmentation_mat_guider = augmentation_mat
+        # augmentation_mat = augmentation_mat.dot(scale_im_mat)
 
 
         return im, flatten_transform(augmentation_mat), flatten_transform(augmentation_mat_guider)
@@ -253,8 +277,8 @@ def normalize_images(*images):
     def _normalize(img):
         if img is not None:
             img = img.astype(float)[:,:,:3]
-            return img
-            # return (img - np.min(img))/np.max(img)
+            # return img
+            return (img - np.min(img))/(np.max(img) - np.min(img))
         return None
 
     # first add n_channels_dim
