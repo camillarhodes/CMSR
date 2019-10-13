@@ -145,12 +145,13 @@ def random_augment(ims,
         guider_to_im_ratio = np.true_divide(guiding_im_shape, im.shape)[:2]
 
         # first scale the guider/grid to the size of the image
-        scale_guider_mat = np.array([[1.0 / guider_to_im_ratio[0], 0, 0],
-                                     [0, 1.0 / guider_to_im_ratio[1], 0],
+        scale_im_mat = np.array([[guider_to_im_ratio[0], 0, 0],
+                                     [0, guider_to_im_ratio[1], 0],
                                      [0, 0, 1]])
 
         # then perform the same augmentation
-        augmentation_mat_guider = augmentation_mat.dot(scale_guider_mat)
+        augmentation_mat_guider = augmentation_mat
+        augmentation_mat = augmentation_mat.dot(scale_im_mat)
 
 
         return im, flatten_transform(augmentation_mat), flatten_transform(augmentation_mat_guider)
