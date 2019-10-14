@@ -23,7 +23,7 @@ class ZSSR:
     sr = None
     sf = None
     gt_per_sf = None
-    gi_per_sf = None
+    # gi_per_sf = None
     final_sr = None
     augmented_grid = None
     augmented_grid_t = None
@@ -153,29 +153,31 @@ class ZSSR:
             self.output_shape = np.uint(np.ceil(np.array(self.input.shape[0:2]) * self.sf))
 
             # TODO: scale_factor=... line is not accurate (base sf), be careful
-            self.gi_per_sf = (imresize(self.gi,
-                                   scale_factor=self.sf / self.conf.scale_factors[-1] if self.output_shape is None else None,
-                                   output_shape=self.output_shape,
-                                   kernel=self.conf.downscale_gt_method)
-                          if (self.gi is not None and
-                              self.sf is not None)
-                              # self.sf is not None and
-                              # np.any(np.abs(self.sf - self.conf.scale_factors[-1]) > 0.01))
-                          else self.gi)
+            # self.gi_per_sf = (imresize(self.gi,
+            #                        scale_factor=self.sf / self.conf.scale_factors[-1] if self.output_shape is None else None,
+            #                        output_shape=self.output_shape,
+            #                        kernel=self.conf.downscale_gt_method)
+            #               if (self.gi is not None and
+            #                   self.sf is not None)
+            #                   # self.sf is not None and
+            #                   # np.any(np.abs(self.sf - self.conf.scale_factors[-1]) > 0.01))
+            #               else self.gi)
 
             # Downscale ground-truth to the intermediate sf size (for gradual SR).
             # This only happens if there exists ground-truth and sf is not the last one (or too close to it).
             # We use imresize with both scale and output-size, see comment in forward_backward_pass.
             # noinspection PyTypeChecker
-            self.gt_per_sf,  = normalize_images((imresize(self.gt,
-                                       scale_factor=self.sf / self.conf.scale_factors[-1] if self.output_shape is None else None,
-                                       output_shape=self.output_shape,
-                                       kernel=self.conf.downscale_gt_method)
-                              if (self.gt is not None and
-                                  self.sf is not None)
-                              # self.sf is not None and
-                              # np.any(np.abs(self.sf - self.conf.scale_factors[-1]) > 0.01))
-                              else self.gt))
+            self.gt_per_sf = np.clip(
+                imresize(self.gt,
+                         scale_factor=self.sf / self.conf.scale_factors[-1] if self.output_shape is None else None,
+                         output_shape=self.output_shape,
+                         kernel=self.conf.downscale_gt_method
+                         ), 0, 1
+            ) if (self.gt is not None and
+                  self.sf is not None) else self.gt
+            # self.sf is not None and
+            # np.any(np.abs(self.sf - self.conf.scale_factors[-1]) > 0.01))
+
 
 
             # Initialize network weights and meta parameters
@@ -305,10 +307,8 @@ class ZSSR:
                         cpab_layer(
                             affine_layer(
                                 guider_with_shape_t, self.theta_affine_t, self.gi.shape[:2]
-                            ),
-                            self.theta_cpab_t, self.gi.shape[:2]
-                        ),
-                        self.theta_tps_t, self.gi.shape[:2]
+                            ), self.theta_cpab_t, self.gi.shape[:2]
+                        ), self.theta_tps_t, self.gi.shape[:2]
                     )
 
                 def get_original_guider():
@@ -322,9 +322,7 @@ class ZSSR:
                 self.hr_guider_augmented_t = tf.cond(should_deform_and_augment_guider, get_augmented_guider, get_original_guider)
 
                 # Define the concatenation layer
-                concat_layer = tf.concat(
-                    [self.lr_son_t, self.hr_guider_augmented_t], 3, name ='concat_layer'
-                )
+                concat_layer = tf.concat([self.lr_son_t, self.hr_guider_augmented_t], 3, name ='concat_layer')
                 #concat_layer = None
 
 #                 self.filters_t_guider = [tf.get_variable(shape=meta.filter_shape_guider[ind], name='filter_guider_%d' % ind,
@@ -423,7 +421,7 @@ class ZSSR:
         # Note: we specify both output_size and scale_factor. best explained by example: say father size is 9 and sf=2,
         # small_son size is 4. if we upscale by sf=2 we get wrong size, if we upscale to size 9 we get wrong sf.
         # The current imresize implementation supports specifying both.
-        interpolated_lr_son = imresize(lr_son, self.sf, hr_father.shape, self.conf.upscale_method)
+        interpolated_lr_son = np.clip(imresize(lr_son, self.sf, hr_father.shape, self.conf.upscale_method), 0, 1)
 
         # [GUY] add n_channels when needed
         interpolated_lr_son, hr_father =  add_n_channels_dim(interpolated_lr_son, hr_father)
@@ -434,7 +432,6 @@ class ZSSR:
         if hr_guider is not None:
             feed_dict = {
                 'learning_rate:0': self.learning_rate,
-                # 'learning_rate_grid:0': self.learning_rate_grid,
                 'lr_son:0': np.expand_dims(interpolated_lr_son, 0),
                 'hr_father:0': np.expand_dims(hr_father, 0),
                 'hr_guider:0': np.expand_dims(hr_guider, 0),
@@ -547,12 +544,12 @@ class ZSSR:
             self.psnr.append(tf.image.psnr(self.gt_per_sf, self.sr, max_val=1).eval() if self.gt_per_sf is not None else None)
 
         # 3. True MSE of simple interpolation for reference (only if ground-truth was given)
-        interp_sr = imresize(self.input, self.sf, self.output_shape, self.conf.upscale_method)
+        interp_sr = np.clip(imresize(self.input, self.sf, self.output_shape, self.conf.upscale_method),0 ,1)
         self.interp_mse = (self.interp_mse + [np.mean(np.ndarray.flatten(np.square(self.gt_per_sf - interp_sr)))
                            if self.gt_per_sf is not None else None])
 
         # 4. Reconstruction MSE of simple interpolation over downscaled input
-        interp_rec = imresize(self.father_to_son(self.input), self.sf, self.input.shape[0:2], self.conf.upscale_method)
+        interp_rec = np.clip(imresize(self.father_to_son(self.input), self.sf, self.input.shape[0:2], self.conf.upscale_method),0 ,1)
         self.interp_rec_mse.append(np.mean(np.ndarray.flatten(np.square(self.input - interp_rec))))
 
         # Track the iters in which tests are made for the graphics x axis
@@ -681,6 +678,7 @@ class ZSSR:
                     ).eval(session=self.sess)[0]
 
                     # scale to deformed_gi to the right sf
+                    # TODO: should we clip?
                     augmented_gi = imresize(augmented_gi,
                                         scale_factor=self.sf*self.base_sf/self.conf.scale_factors[-1],
                                         kernel=self.conf.downscale_gt_method)
