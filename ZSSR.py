@@ -167,13 +167,13 @@ class ZSSR:
             # This only happens if there exists ground-truth and sf is not the last one (or too close to it).
             # We use imresize with both scale and output-size, see comment in forward_backward_pass.
             # noinspection PyTypeChecker
-            self.gt_per_sf = np.clip(
+            self.gt_per_sf, = normalize_images(np.clip(
                 imresize(self.gt,
                          scale_factor=self.sf / self.conf.scale_factors[-1] if self.output_shape is None else None,
                          output_shape=self.output_shape,
                          kernel=self.conf.downscale_gt_method
                          ), 0, 1
-            ) if (self.gt is not None and
+            )) if (self.gt is not None and
                   self.sf is not None) else self.gt
             # self.sf is not None and
             # np.any(np.abs(self.sf - self.conf.scale_factors[-1]) > 0.01))
