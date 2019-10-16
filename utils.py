@@ -253,8 +253,9 @@ def normalize_images(*images):
     def _normalize(img):
         if img is not None:
             img = img.astype(float)[:,:,:3]
-            # return img
-            return (img - np.min(img))/(np.max(img) - np.min(img))
+            return img
+            # dont scale! it causes varying averages in different images
+            # return (img - np.min(img))/(np.max(img) - np.min(img))
         return None
 
     # first add n_channels_dim
