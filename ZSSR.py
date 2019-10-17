@@ -70,6 +70,7 @@ class ZSSR:
     filters_t_guider = None
     layers_t = None
     layers_t_guider = None
+    coef_t_guider = None
     layers_t_localisation = None
     net_output_t = None
     loss_t = None
@@ -340,6 +341,8 @@ class ZSSR:
                 self.layers_t_guider[l+1] = tf.nn.conv2d(self.layers_t_guider[l], self.filters_t_guider[l],
                                               [1, 1, 1, 1], "SAME", name='layer_guider_%d' % (l + 1))
 
+                self.coef_t_guider = tf.Variable(initial_value=0.0)
+
                 # Define the concatenation layer
                 concat_layer = tf.concat([self.lr_son_t, self.layers_t_guider[-1]], 3, name ='concat_layer')
                 concat_layer = None
@@ -367,7 +370,7 @@ class ZSSR:
             self.layers_t[-1] = tf.nn.conv2d(self.layers_t[l], self.filters_t[l],
                                              [1, 1, 1, 1], "SAME", name='layer_%d' % (l + 1))
             # Output image (Add last conv layer result to input, residual learning with global skip connection)
-            self.net_output_t = self.layers_t[-1] +  self.conf.learn_residual * self.lr_son_t + self.layers_t_guider[-1]
+            self.net_output_t = self.layers_t[-1] +  self.conf.learn_residual * self.lr_son_t + self.layers_t_guider[-1] * self.coef_t_guider
             #self.net_output_t = self.layers_t[-1] +  self.conf.learn_residual * self.lr_son_t
 
             # Final loss (L1 loss between label and output layer)
@@ -381,7 +384,7 @@ class ZSSR:
             affine_optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate_t * self.conf.learning_rate_affine_ratio)
             cpab_optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate_t * self.conf.learning_rate_cpab_ratio)
 
-            self.train_op = optimizer.minimize(self.loss_t, var_list=self.filters_t+self.filters_t_guider)
+            self.train_op = optimizer.minimize(self.loss_t, var_list=self.filters_t+self.filters_t_guider+[self.coef_t_guider])
 
             if self.gi is not None:
                 # self.train_grid_op = grid_optimizer.minimize(self.loss_t, var_list=[self.gi_grid])
