@@ -342,6 +342,7 @@ class ZSSR:
 
                 # Define the concatenation layer
                 concat_layer = tf.concat([self.lr_son_t, self.layers_t_guider[-1]], 3, name ='concat_layer')
+                concat_layer = None
 
 
             # Define first layer
