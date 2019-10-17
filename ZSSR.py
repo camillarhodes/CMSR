@@ -661,7 +661,7 @@ class ZSSR:
                 'augmentation_output_shape:0': self.gi.shape[:2]
 
             }
-        )[0]
+        )[0] if self.gi is not None else None
 
         # The weird range means we only do it once if output_flip is disabled
         # We need to check if scale factor is symmetric to all dimensions, if not we will do 180 jumps rather than 90
