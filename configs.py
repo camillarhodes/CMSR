@@ -91,15 +91,15 @@ X2_ONE_JUMP_IDEAL_CONF = Config()
 X2_ONE_JUMP_IDEAL_CONF.input_path = os.path.dirname(__file__) + '/set14'
 
 # [GUY]
-THERMAL_IMAGES_CONF = Config(input_filter_depth=6, output_filter_depth=3, guider_output_filter_depth=3,
+THERMAL_IMAGES_CONF = Config(input_filter_depth=3, output_filter_depth=3, guider_output_filter_depth=3,
                              depth_guider=3)
 THERMAL_IMAGES_CONF.plot_losses = True
-THERMAL_IMAGES_CONF.crop_size = 64
+THERMAL_IMAGES_CONF.crop_size = 48
 THERMAL_IMAGES_CONF.max_iters = 800
 THERMAL_IMAGES_CONF.run_test_every = 20
 THERMAL_IMAGES_CONF.display_every = 1
 # THERMAL_IMAGES_CONF.input_path = os.path.dirname(__file__) + '/data_processed/current3'
-THERMAL_IMAGES_CONF.input_path = os.path.dirname(__file__) + '/Maagad_reg'
+THERMAL_IMAGES_CONF.input_path = os.path.dirname(__file__) + '/ULB17-VT'
 # THERMAL_IMAGES_CONF.img_ext = 'tiff'
 # THERMAL_IMAGES_CONF.guiding_img_ext = 'jpg'
 THERMAL_IMAGES_CONF.scale_factors = [[2.0, 2.0], [4.0, 4.0]]
@@ -107,7 +107,7 @@ THERMAL_IMAGES_CONF.scale_factors = [[2.0, 2.0], [4.0, 4.0]]
 THERMAL_IMAGES_CONF.img_ext = 'png'
 THERMAL_IMAGES_CONF.guiding_img_ext = 'png'
 # THERMAL_IMAGES_CONF.scale_factors = [[2.0, 2.0], [4.0, 4.0]]  # list of pairs (vertical, horizontal) for gradual increments in resolution
-# THERMAL_IMAGES_CONF.back_projection_iters = [10, 10]
+THERMAL_IMAGES_CONF.back_projection_iters = [6, 10]
 THERMAL_IMAGES_CONF.base_change_sfs = [[2.0, 2.0]]  # list of pairs (vertical, horizontal) for gradual increments in resolution
 # THERMAL_IMAGES_CONF.scale_factors = [[4.0, 4.0]]  # list of pairs (vertical, horizontal) for gradual increments in resolution
 THERMAL_IMAGES_CONF.learning_rate_cpab_ratio = 10
