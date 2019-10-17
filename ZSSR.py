@@ -386,10 +386,12 @@ class ZSSR:
             tps_optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate_t * self.conf.learning_rate_tps_ratio)
             affine_optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate_t * self.conf.learning_rate_affine_ratio)
             cpab_optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate_t * self.conf.learning_rate_cpab_ratio)
+            guider_coef_optimizer =tf.train.AdamOptimizer(learning_rate=self.learning_rate_t * 100)
 
-            self.train_op = optimizer.minimize(self.loss_t, var_list=self.filters_t+self.filters_t_guider+[self.coef_t_guider])
+            self.train_op = optimizer.minimize(self.loss_t, var_list=self.filters_t+self.filters_t_guider)
 
             if self.gi is not None:
+                self.train_guider_coef = guider_coef_optimizer.minimize(self.loss_t, var_list=[self.coef_t_guider])
                 # self.train_grid_op = grid_optimizer.minimize(self.loss_t, var_list=[self.gi_grid])
                 self.train_tps_op = tps_optimizer.minimize(self.loss_t, var_list=[self.theta_tps_t])
                 self.train_affine_op = affine_optimizer.minimize(self.loss_t, var_list=[self.theta_affine_t])
@@ -446,10 +448,10 @@ class ZSSR:
                 'augmentation_output_shape:0': interpolated_lr_son.shape[:2]
             }
             # theta, _1, _2, _3, self.hr_guider_augmented, self.hr_guider_deformed, self.loss[self.iter], self.loss_rec[self.iter], train_output, self.augmented_grid = \
-            _1, _2, _3, _4, self.hr_guider_augmented, self.hr_guider_deformed, self.loss[self.iter], self.loss_rec[self.iter], train_output, self.augmented_grid = \
+            _1, _2, _3, _4, _5, self.hr_guider_augmented, self.hr_guider_deformed, self.loss[self.iter], self.loss_rec[self.iter], train_output, self.augmented_grid = \
                 self.sess.run(
                     # [self.theta_affine_t, self.train_op, self.train_affine_op, self.train_tps_op, self.hr_guider_augmented_t, self.hr_guider_deformed_t, self.loss_t, self.loss_rec_t, self.net_output_t, self.augmented_grid_t], feed_dict
-                    [self.train_op, self.train_tps_op, self.train_affine_op, self.train_cpab_op, self.hr_guider_augmented_t, self.hr_guider_deformed_t, self.loss_t, self.loss_rec_t, self.net_output_t, self.augmented_grid_t], feed_dict
+                    [self.train_op, self.train_tps_op, self.train_affine_op, self.train_cpab_op, self.train_guider_coef, self.hr_guider_augmented_t, self.hr_guider_deformed_t, self.loss_t, self.loss_rec_t, self.net_output_t, self.augmented_grid_t], feed_dict
                 )
 
         else:
