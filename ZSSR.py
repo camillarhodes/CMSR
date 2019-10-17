@@ -321,9 +321,6 @@ class ZSSR:
 
                 self.hr_guider_augmented_t = tf.cond(should_deform_and_augment_guider, get_augmented_guider, get_original_guider)
 
-                # Define the concatenation layer
-                concat_layer = tf.concat([self.lr_son_t, self.hr_guider_augmented_t], 3, name ='concat_layer')
-                concat_layer = None
 
                 self.filters_t_guider = [tf.get_variable(shape=meta.filter_shape_guider[ind], name='filter_guider_%d' % ind,
                                                initializer=tf.random_normal_initializer(
@@ -342,6 +339,9 @@ class ZSSR:
 
                 self.layers_t_guider[l+1] = tf.nn.conv2d(self.layers_t_guider[l], self.filters_t_guider[l],
                                               [1, 1, 1, 1], "SAME", name='layer_guider_%d' % (l + 1))
+
+                # Define the concatenation layer
+                concat_layer = tf.concat([self.lr_son_t, self.layers_t_guider[-1]], 3, name ='concat_layer')
 
 
             # Define first layer
