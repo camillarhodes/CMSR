@@ -380,7 +380,7 @@ class ZSSR:
             affine_optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate_t * self.conf.learning_rate_affine_ratio)
             cpab_optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate_t * self.conf.learning_rate_cpab_ratio)
 
-            self.train_op = optimizer.minimize(self.loss_t, var_list=self.filters_t)
+            self.train_op = optimizer.minimize(self.loss_t, var_list=self.filters_t+self.filters_t_guider)
 
             if self.gi is not None:
                 # self.train_grid_op = grid_optimizer.minimize(self.loss_t, var_list=[self.gi_grid])
