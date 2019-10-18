@@ -326,6 +326,7 @@ class ZSSR:
                 # convert guider to feature map using AE
                 vars_before = tf.trainable_variables()
                 self.hr_guider_deformed_t, self.loss_ae_t = self.reconstruct_using_ae(self.hr_guider_deformed_t, input_n_channel=self.gi.shape[-1])
+                self.loss_ae_t /= np.sum(self.gi**2)
                 vars_ae = list(set(tf.trainable_variables()) - set(vars_before))
 
                 def get_augmented_guider():
@@ -400,7 +401,7 @@ class ZSSR:
             self.train_op = optimizer.minimize(self.loss_before_guider_t, var_list=self.filters_t)
 
             # train guider layers and ae layers
-            self.train_guider_op = guider_optimizer.minimize(self.loss_t, var_list=self.filters_t_guider+vars_ae)
+            self.train_guider_op = guider_optimizer.minimize(self.loss_t+self.loss_ae_t, var_list=self.filters_t_guider+vars_ae)
 
             if self.gi is not None:
                 # self.train_grid_op = grid_optimizer.minimize(self.loss_t, var_list=[self.gi_grid])
