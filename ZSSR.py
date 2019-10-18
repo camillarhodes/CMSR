@@ -400,7 +400,7 @@ class ZSSR:
             self.train_op = optimizer.minimize(self.loss_before_guider_t, var_list=self.filters_t)
 
             # train guider layers and ae layers
-            self.train_guider_op = guider_optimizer.minimize(self.loss_t+self.loss_ae_t, var_list=self.filters_t_guider+vars_ae)
+            self.train_guider_op = guider_optimizer.minimize(self.loss_t, var_list=self.filters_t_guider+vars_ae)
 
             if self.gi is not None:
                 # self.train_grid_op = grid_optimizer.minimize(self.loss_t, var_list=[self.gi_grid])
