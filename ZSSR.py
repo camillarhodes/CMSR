@@ -325,7 +325,7 @@ class ZSSR:
 
                 # convert guider to feature map using AE
                 vars_before = tf.trainable_variables()
-                self.hr_guider_deformed_t = self.reconstruct_using_ae(self.hr_guider_deformed_t, input_n_channel=self.gi.shape[-1])
+                self.hr_guider_deformed_t, self.loss_ae_t = self.reconstruct_using_ae(self.hr_guider_deformed_t, input_n_channel=self.gi.shape[-1])
                 vars_ae = list(set(tf.trainable_variables()) - set(vars_before))
 
                 def get_augmented_guider():
@@ -391,6 +391,7 @@ class ZSSR:
 
             # Apply adam optimizer
             optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate_t)
+            guider_optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate_t*100)
             # grid_optimizer = tf.compat.v1.train.AdamOptimizer(learning_rate=self.learning_rate_t)
             tps_optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate_t * self.conf.learning_rate_tps_ratio)
             affine_optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate_t * self.conf.learning_rate_affine_ratio)
@@ -399,7 +400,7 @@ class ZSSR:
             self.train_op = optimizer.minimize(self.loss_before_guider_t, var_list=self.filters_t)
 
             # train guider layers and ae layers
-            self.train_guider_op = optimizer.minimize(self.loss_t, var_list=self.filters_t_guider+vars_ae)
+            self.train_guider_op = guider_optimizer.minimize(self.loss_t+self.loss_ae_t, var_list=self.filters_t_guider+vars_ae)
 
             if self.gi is not None:
                 # self.train_grid_op = grid_optimizer.minimize(self.loss_t, var_list=[self.gi_grid])
@@ -457,10 +458,10 @@ class ZSSR:
                 'augmentation_output_shape:0': interpolated_lr_son.shape[:2]
             }
             # theta, _1, _2, _3, self.hr_guider_augmented, self.hr_guider_deformed, self.loss[self.iter], self.loss_rec[self.iter], train_output, self.augmented_grid = \
-            _1, _2, _3, _4, _5, self.hr_guider_augmented, self.hr_guider_deformed, self.loss[self.iter], train_output, self.augmented_grid = \
+            self.loss_ae, _1, _2, _3, _4, _5, self.hr_guider_augmented, self.hr_guider_deformed, self.loss[self.iter], train_output, self.augmented_grid = \
                 self.sess.run(
                     # [self.theta_affine_t, self.train_op, self.train_affine_op, self.train_tps_op, self.hr_guider_augmented_t, self.hr_guider_deformed_t, self.loss_t, self.loss_rec_t, self.net_output_t, self.augmented_grid_t], feed_dict
-                    [self.train_op, self.train_guider_op, self.train_tps_op, self.train_affine_op, self.train_cpab_op, self.hr_guider_augmented_t, self.hr_guider_deformed_t, self.loss_t, self.net_output_t, self.augmented_grid_t], feed_dict
+                    [self.loss_ae_t, self.train_op, self.train_guider_op, self.train_tps_op, self.train_affine_op, self.train_cpab_op, self.hr_guider_augmented_t, self.hr_guider_deformed_t, self.loss_t, self.net_output_t, self.augmented_grid_t], feed_dict
                 )
 
         else:
@@ -875,15 +876,19 @@ class ZSSR:
         pool1 = MaxPooling(kernel_shape=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='SAME', scope='pool_1')(conv1)
         conv2 = Convolution2D([5, 5, 32, 32], activation=tf.nn.relu, scope='conv_2')(pool1)
         pool2 = MaxPooling(kernel_shape=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='SAME', scope='pool_2')(conv2)
-        unfold = Unfold(scope='unfold')(pool2)
+        conv3 = Convolution2D([5, 5, 32, 32], activation=tf.nn.relu, scope='conv_3')(pool2)
+        pool3 = MaxPooling(kernel_shape=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='SAME', scope='pool_3')(conv3)
+        unfold = Unfold(scope='unfold')(pool3)
         encoded = FullyConnected(20, activation=tf.nn.relu, scope='encode')(unfold)
         # decode
-        # change 60,80 to input shape / 4
-        decoded = FullyConnected(60*80*32, activation=tf.nn.relu, scope='decode')(encoded)
-        fold = Fold([-1, 60, 80, 32], scope='fold')(decoded)
-        unpool1 = UnPooling((2, 2), output_shape=tf.shape(conv2), scope='unpool_1')(fold)
-        deconv1 = DeConvolution2D([5, 5, 32, 32], output_shape=tf.shape(pool1), activation=tf.nn.relu, scope='deconv_1')(unpool1)
-        unpool2 = UnPooling((2, 2), output_shape=tf.shape(conv1), scope='unpool_2')(deconv1)
-        reconstruction = DeConvolution2D([5, 5, input_n_channel, 32], output_shape=tf.shape(input), activation=tf.nn.sigmoid, scope='deconv_2')(unpool2)
-        return reconstruction
-
+        # change 30,40 to input shape / 8
+        decoded = FullyConnected(30*40*32, activation=tf.nn.relu, scope='decode')(encoded)
+        fold = Fold([-1, 30, 40, 32], scope='fold')(decoded)
+        unpool1 = UnPooling((2, 2), output_shape=tf.shape(conv3), scope='unpool_1')(fold)
+        deconv1 = DeConvolution2D([5, 5, 32, 32], output_shape=tf.shape(pool2), activation=tf.nn.relu, scope='deconv_1')(unpool1)
+        unpool2 = UnPooling((2, 2), output_shape=tf.shape(conv2), scope='unpool_2')(deconv1)
+        deconv2 = DeConvolution2D([5, 5, 32, 32], output_shape=tf.shape(pool1), activation=tf.nn.relu, scope='deconv_2')(unpool2)
+        unpool3 = UnPooling((2, 2), output_shape=tf.shape(conv1), scope='unpool_3')(deconv2)
+        reconstruction = DeConvolution2D([5, 5, input_n_channel, 32], output_shape=tf.shape(input), activation=tf.nn.sigmoid, scope='deconv_2')(unpool3)
+        loss = tf.nn.l2_loss(input - reconstruction)
+        return reconstruction, loss
