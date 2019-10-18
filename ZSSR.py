@@ -386,7 +386,7 @@ class ZSSR:
             # Final loss (L1 loss between label and output layer)
             self.loss_before_guider_t = tf.reduce_mean(tf.reshape(tf.abs(self.net_output_before_guider_t - self.hr_father_t), [-1]))
 
-            self.net_output_t = self.net_output_before_guider_t + self.layers_t_guider[-1]
+            self.net_output_t = self.net_output_before_guider_t + self.hr_guider_augmented_t[-1]
             self.loss_t = tf.reduce_mean(tf.reshape(tf.abs(self.net_output_t - self.hr_father_t), [-1]))
 
             # Apply adam optimizer
