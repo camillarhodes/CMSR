@@ -367,12 +367,14 @@ class ZSSR:
             self.layers_t[-1] = tf.nn.conv2d(self.layers_t[l], self.filters_t[l],
                                              [1, 1, 1, 1], "SAME", name='layer_%d' % (l + 1))
             # Output image (Add last conv layer result to input, residual learning with global skip connection)
-            self.net_output_t = self.layers_t[-1] +  self.conf.learn_residual * self.lr_son_t + self.layers_t_guider[-1]
+            self.net_output_before_guider_t = self.layers_t[-1] +  self.conf.learn_residual * self.lr_son_t
             #self.net_output_t = self.layers_t[-1] +  self.conf.learn_residual * self.lr_son_t
 
             # Final loss (L1 loss between label and output layer)
-            self.loss_rec_t = tf.reduce_mean(tf.reshape(tf.abs(self.net_output_t - self.hr_father_t), [-1]))
-            self.loss_t = self.loss_rec_t
+            self.loss_before_guider_t = tf.reduce_mean(tf.reshape(tf.abs(self.net_output_before_guider_t - self.hr_father_t), [-1]))
+
+            self.net_output_t = self.net_output_before_guider_t + self.layers_t_guider[-1]
+            self.loss_t = tf.reduce_mean(tf.reshape(tf.abs(self.net_output_t - self.hr_father_t), [-1]))
 
             # Apply adam optimizer
             optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate_t)
@@ -381,7 +383,8 @@ class ZSSR:
             affine_optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate_t * self.conf.learning_rate_affine_ratio)
             cpab_optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate_t * self.conf.learning_rate_cpab_ratio)
 
-            self.train_op = optimizer.minimize(self.loss_t, var_list=self.filters_t+self.filters_t_guider)
+            self.train_op = optimizer.minimize(self.loss_before_guider_t, var_list=self.filters_t)
+            self.train_guider_op = optimizer.minimize(self.loss_t, var_list=self.filters_t_guider)
 
             if self.gi is not None:
                 # self.train_grid_op = grid_optimizer.minimize(self.loss_t, var_list=[self.gi_grid])
@@ -407,7 +410,6 @@ class ZSSR:
 
         # Initialize all counters etc
         self.loss = [None] * self.conf.max_iters
-        self.loss_rec = [None] * self.conf.max_iters
         self.loss_grid_bad_order = [None] * self.conf.max_iters
         self.loss_grid_inverse = [None] * self.conf.max_iters
         self.loss_tv_guider = [None] * self.conf.max_iters
@@ -440,10 +442,10 @@ class ZSSR:
                 'augmentation_output_shape:0': interpolated_lr_son.shape[:2]
             }
             # theta, _1, _2, _3, self.hr_guider_augmented, self.hr_guider_deformed, self.loss[self.iter], self.loss_rec[self.iter], train_output, self.augmented_grid = \
-            _1, _2, _3, _4, self.hr_guider_augmented, self.hr_guider_deformed, self.loss[self.iter], self.loss_rec[self.iter], train_output, self.augmented_grid = \
+            _1, _2, _3, _4, _5, self.hr_guider_augmented, self.hr_guider_deformed, self.loss[self.iter], train_output, self.augmented_grid = \
                 self.sess.run(
                     # [self.theta_affine_t, self.train_op, self.train_affine_op, self.train_tps_op, self.hr_guider_augmented_t, self.hr_guider_deformed_t, self.loss_t, self.loss_rec_t, self.net_output_t, self.augmented_grid_t], feed_dict
-                    [self.train_op, self.train_tps_op, self.train_affine_op, self.train_cpab_op, self.hr_guider_augmented_t, self.hr_guider_deformed_t, self.loss_t, self.loss_rec_t, self.net_output_t, self.augmented_grid_t], feed_dict
+                    [self.train_op, self.train_guider_op, self.train_tps_op, self.train_affine_op, self.train_cpab_op, self.hr_guider_augmented_t, self.hr_guider_deformed_t, self.loss_t, self.net_output_t, self.augmented_grid_t], feed_dict
                 )
 
         else:
@@ -606,10 +608,6 @@ class ZSSR:
                 print(
                     'sf:', self.sf*self.base_sf, ', iteration: ', self.iter,
                     ', loss: ', self.loss[self.iter],
-                    ', loss_rec: ', self.loss_rec[self.iter],
-                    ', loss_grid_bad_order: ', self.loss_grid_bad_order[self.iter],
-                    ', loss_grid_inverse: ', self.loss_grid_inverse[self.iter],
-                    ', loss_tv_guider: ', self.loss_tv_guider[self.iter]
                 )
 
             # Test network
