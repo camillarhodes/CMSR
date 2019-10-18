@@ -53,11 +53,6 @@ class Config:
     cmap = None
     img_ext = 'png'
     guiding_img_ext = 'png'
-    # grid_coef_bad_order = 100.0
-    # grid_coef_bad_order = 0
-    # grid_coef_inverse = 0.1
-    # grid_coef_inverse = 0.0
-    # coef_tv_guider = 1.0
 
     # params related to deformation
     learning_rate_cpab_ratio = 1.0 # ratio between lr and deformation lr
@@ -76,9 +71,9 @@ class Config:
         self.filter_shape = ([[3, 3, input_filter_depth, self.width]] +
                              [[3, 3, self.width, self.width]] * (self.depth-2) +
                              [[3, 3, self.width, output_filter_depth]])
-        self.filter_shape_guider = ([[3, 3, guider_filter_depth, self.width]] +
-                             [[3, 3, self.width, self.width]] * (self.depth_guider-2) +
-                             [[3, 3, self.width, guider_output_filter_depth]])
+        self.filter_shape_guider = ([[5, 5, guider_filter_depth, self.width]] +
+                             [[5, 5, self.width, self.width]] * (self.depth_guider-2) +
+                             [[5, 5, self.width, guider_output_filter_depth]])
 
 
 ########################################

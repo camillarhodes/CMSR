@@ -10,6 +10,8 @@ from utils import *
 from generic_stn import generic_grid_generator, generic_spatial_transformer_network as generic_transformer
 from ddtn.transformers.transformer_util import get_transformer_layer, get_transformer_dim, get_transformer_init_weights
 from ddtn.transformers.setup_CPAB_transformer import setup_CPAB_transformer
+from conv_ae.models import *
+
 
 class ZSSR:
     # Basic current state variables initialization / declaration
@@ -70,7 +72,6 @@ class ZSSR:
     filters_t_guider = None
     layers_t = None
     layers_t_guider = None
-    coef_t_guider = None
     layers_t_localisation = None
     net_output_t = None
     loss_t = None
@@ -238,6 +239,7 @@ class ZSSR:
                 self.hr_guider_with_shape_t = tf.Variable(np.zeros((1, ) + add_n_channels_dim(self.gi)[0].shape), dtype=np.float32, trainable=False)
 
 
+
             # Input image
             self.lr_son_t = tf.placeholder(tf.float32, name='lr_son')
 
@@ -300,11 +302,8 @@ class ZSSR:
                 # guider_with_shape_t = generic_transformer(guider_with_shape_t, self.gi_grid)
                 # return guider_with_shape_t
 
-                self.coef_t_guider = tf.Variable(initial_value=np.ones_like(self.gi), dtype=tf.float32)
-
                 def get_deformed_guider():
                     guider_with_shape_t = tf.assign(self.hr_guider_with_shape_t, self.hr_guider_t)
-                    guider_with_shape_t = tf.multiply(guider_with_shape_t, self.coef_t_guider)
 
 
                     # TPS / affine transform
@@ -320,6 +319,14 @@ class ZSSR:
                     return self.hr_guider_t
 
                 self.hr_guider_deformed_t = tf.cond(should_deform_and_augment_guider, get_deformed_guider, get_original_guider)
+
+                # handle final_test case
+                self.hr_guider_deformed_t.set_shape((1, ) + add_n_channels_dim(self.gi)[0].shape)
+
+                # convert guider to feature map using AE
+                vars_before = tf.trainable_variables()
+                self.hr_guider_deformed_t = self.reconstruct_using_ae(self.hr_guider_deformed_t, input_n_channel=self.gi.shape[-1])
+                vars_ae = list(set(tf.trainable_variables()) - set(vars_before))
 
                 def get_augmented_guider():
                     return generic_transformer(self.hr_guider_deformed_t, self.augmented_grid_t)
@@ -388,13 +395,13 @@ class ZSSR:
             tps_optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate_t * self.conf.learning_rate_tps_ratio)
             affine_optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate_t * self.conf.learning_rate_affine_ratio)
             cpab_optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate_t * self.conf.learning_rate_cpab_ratio)
-            guider_coef_optimizer =tf.train.AdamOptimizer(learning_rate=self.learning_rate_t * 100)
 
             self.train_op = optimizer.minimize(self.loss_before_guider_t, var_list=self.filters_t)
-            self.train_guider_op = optimizer.minimize(self.loss_t, var_list=self.filters_t_guider)
+
+            # train guider layers and ae layers
+            self.train_guider_op = optimizer.minimize(self.loss_t, var_list=self.filters_t_guider+vars_ae)
 
             if self.gi is not None:
-                self.train_guider_coef = guider_coef_optimizer.minimize(self.loss_t, var_list=[self.coef_t_guider])
                 # self.train_grid_op = grid_optimizer.minimize(self.loss_t, var_list=[self.gi_grid])
                 self.train_tps_op = tps_optimizer.minimize(self.loss_t, var_list=[self.theta_tps_t])
                 self.train_affine_op = affine_optimizer.minimize(self.loss_t, var_list=[self.theta_affine_t])
@@ -862,4 +869,21 @@ class ZSSR:
         # displacement_map[:,:,1] /= (np.max(displacement_map[:,:,1]) / 255)
 
         return displacement_map
+
+    def reconstruct_using_ae(self, input, input_n_channel):
+        conv1 = Convolution2D([5, 5, input_n_channel, 32], activation=tf.nn.relu, scope='conv_1')(input)
+        pool1 = MaxPooling(kernel_shape=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='SAME', scope='pool_1')(conv1)
+        conv2 = Convolution2D([5, 5, 32, 32], activation=tf.nn.relu, scope='conv_2')(pool1)
+        pool2 = MaxPooling(kernel_shape=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='SAME', scope='pool_2')(conv2)
+        unfold = Unfold(scope='unfold')(pool2)
+        encoded = FullyConnected(20, activation=tf.nn.relu, scope='encode')(unfold)
+        # decode
+        # change 60,80 to input shape / 4
+        decoded = FullyConnected(60*80*32, activation=tf.nn.relu, scope='decode')(encoded)
+        fold = Fold([-1, 60, 80, 32], scope='fold')(decoded)
+        unpool1 = UnPooling((2, 2), output_shape=tf.shape(conv2), scope='unpool_1')(fold)
+        deconv1 = DeConvolution2D([5, 5, 32, 32], output_shape=tf.shape(pool1), activation=tf.nn.relu, scope='deconv_1')(unpool1)
+        unpool2 = UnPooling((2, 2), output_shape=tf.shape(conv1), scope='unpool_2')(deconv1)
+        reconstruction = DeConvolution2D([5, 5, input_n_channel, 32], output_shape=tf.shape(input), activation=tf.nn.sigmoid, scope='deconv_2')(unpool2)
+        return reconstruction
 
