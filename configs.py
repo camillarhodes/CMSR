@@ -9,6 +9,7 @@ class Config:
     base_change_sfs = []  # list of scales after which the input is changed to be the output (recommended for high sfs)
     max_iters = 3000
     min_iters = 256
+    train_ae_iters = 128
     min_learning_rate = 9e-6  # this tells the algorithm when to stop (specify lower than the last learning-rate)
     output_flip = True  # geometric self-ensemble (see paper)
     downscale_method = 'cubic'  # a string ('cubic', 'linear'...), has no meaning if kernel given
@@ -58,6 +59,7 @@ class Config:
     learning_rate_cpab_ratio = 1.0 # ratio between lr and deformation lr
     learning_rate_affine_ratio = 1.0 # ratio between lr and deformation lr
     learning_rate_tps_ratio = 1.0 # ratio between lr and deformation lr
+    learning_rate_guider_ratio = 1.0 # ratio between lr and guider lr
     cpab_tessalation_ncx = 2
     cpab_tessalation_ncy = 2
 
@@ -90,7 +92,8 @@ THERMAL_IMAGES_CONF = Config(input_filter_depth=3, output_filter_depth=3, guider
                              depth_guider=6)
 THERMAL_IMAGES_CONF.plot_losses = True
 THERMAL_IMAGES_CONF.crop_size = 48
-THERMAL_IMAGES_CONF.max_iters = 1600
+THERMAL_IMAGES_CONF.max_iters = 800
+THERMAL_IMAGES_CONF.train_ae_iters = 128
 THERMAL_IMAGES_CONF.run_test_every = 20
 THERMAL_IMAGES_CONF.display_every = 1
 # THERMAL_IMAGES_CONF.input_path = os.path.dirname(__file__) + '/data_processed/current3'
@@ -107,7 +110,8 @@ THERMAL_IMAGES_CONF.base_change_sfs = [[2.0, 2.0]]  # list of pairs (vertical, h
 #THERMAL_IMAGES_CONF.scale_factors = [[4.0, 4.0]]  # list of pairs (vertical, horizontal) for gradual increments in resolution
 THERMAL_IMAGES_CONF.learning_rate_cpab_ratio = 10
 THERMAL_IMAGES_CONF.learning_rate_affine_ratio = 5
-THERMAL_IMAGES_CONF.learning_rate_tps_ratio = 0.10
+THERMAL_IMAGES_CONF.learning_rate_tps_ratio = 1
+THERMAL_IMAGES_CONF.learning_rate_guider_ratio = 1
 THERMAL_IMAGES_CONF.cpab_tessalation_ncx = 4
 THERMAL_IMAGES_CONF.cpab_tessalation_ncy = 4
 
