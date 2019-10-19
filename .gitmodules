@@ -2,3 +2,6 @@
 	path = ddtn
 	url = https://github.com/camillarhodes/ddtn
 
+[submodule "tf_unet"]
+	path = tf_unet
+	url = https://github.com/camillarhodes/tf_unet
