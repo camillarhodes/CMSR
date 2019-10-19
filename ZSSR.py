@@ -302,6 +302,13 @@ class ZSSR:
                 # guider_with_shape_t = generic_transformer(guider_with_shape_t, self.gi_grid)
                 # return guider_with_shape_t
 
+		
+                # handle final_test case
+                #self.hr_guider_t.set_shape((1, ) + add_n_channels_dim(self.gi)[0].shape)
+
+                # convert guider to feature map using AE
+                self.hr_guider_t, vars_ae, self.loss_ae = self.reconstruct_using_ae(self.hr_guider_t, input_n_channel=self.gi.shape[-1])
+
                 def get_deformed_guider():
                     guider_with_shape_t = tf.assign(self.hr_guider_with_shape_t, self.hr_guider_t)
 
@@ -320,13 +327,7 @@ class ZSSR:
 
                 self.hr_guider_deformed_t = tf.cond(should_deform_and_augment_guider, get_deformed_guider, get_original_guider)
 
-                # handle final_test case
-                self.hr_guider_deformed_t.set_shape((1, ) + add_n_channels_dim(self.gi)[0].shape)
 
-                # convert guider to feature map using AE
-                self.hr_guider_deformed_t, vars_ae = self.reconstruct_using_ae(self.hr_guider_deformed_t, input_n_channel=self.gi.shape[-1])
-
-                # self.loss_ae_t /= np.sum(self.gi**2)
 
                 def get_augmented_guider():
                     return generic_transformer(self.hr_guider_deformed_t, self.augmented_grid_t)
@@ -386,12 +387,12 @@ class ZSSR:
             # Final loss (L1 loss between label and output layer)
             self.loss_before_guider_t = tf.reduce_mean(tf.reshape(tf.abs(self.net_output_before_guider_t - self.hr_father_t), [-1]))
 
-            self.net_output_t = self.net_output_before_guider_t + self.hr_guider_augmented_t[-1]
+            self.net_output_t = self.net_output_before_guider_t + self.layers_t_guider[-1]
             self.loss_t = tf.reduce_mean(tf.reshape(tf.abs(self.net_output_t - self.hr_father_t), [-1]))
 
             # Apply adam optimizer
             optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate_t)
-            guider_optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate_t*100)
+            guider_optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate_t)
             # grid_optimizer = tf.compat.v1.train.AdamOptimizer(learning_rate=self.learning_rate_t)
             tps_optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate_t * self.conf.learning_rate_tps_ratio)
             affine_optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate_t * self.conf.learning_rate_affine_ratio)
@@ -400,7 +401,8 @@ class ZSSR:
             self.train_op = optimizer.minimize(self.loss_before_guider_t, var_list=self.filters_t)
 
             # train guider layers and ae layers
-            self.train_guider_op = guider_optimizer.minimize(self.loss_t, var_list=self.filters_t_guider+vars_ae)
+            self.train_guider_op = guider_optimizer.minimize(self.loss_t, var_list=vars_ae+self.filters_t_guider)
+            self.train_ae_op = guider_optimizer.minimize(self.loss_ae, var_list=vars_ae)
 
             if self.gi is not None:
                 # self.train_grid_op = grid_optimizer.minimize(self.loss_t, var_list=[self.gi_grid])
@@ -458,10 +460,10 @@ class ZSSR:
                 'augmentation_output_shape:0': interpolated_lr_son.shape[:2]
             }
             # theta, _1, _2, _3, self.hr_guider_augmented, self.hr_guider_deformed, self.loss[self.iter], self.loss_rec[self.iter], train_output, self.augmented_grid = \
-            _1, _2, _3, _4, _5, self.hr_guider_augmented, self.hr_guider_deformed, self.loss[self.iter], train_output, self.augmented_grid = \
+            _,_1, _2, _3, _4, _5, self.hr_guider_augmented, self.hr_guider_deformed, self.loss[self.iter], train_output, self.augmented_grid = \
                 self.sess.run(
                     # [self.theta_affine_t, self.train_op, self.train_affine_op, self.train_tps_op, self.hr_guider_augmented_t, self.hr_guider_deformed_t, self.loss_t, self.loss_rec_t, self.net_output_t, self.augmented_grid_t], feed_dict
-                    [self.train_op, self.train_guider_op, self.train_tps_op, self.train_affine_op, self.train_cpab_op, self.hr_guider_augmented_t, self.hr_guider_deformed_t, self.loss_t, self.net_output_t, self.augmented_grid_t], feed_dict
+                    [self.train_ae_op if self.iter<200 else self.layers_t_guider[-1], self.train_op, self.train_guider_op, self.train_tps_op, self.train_affine_op, self.train_cpab_op, self.hr_guider_augmented_t, self.hr_guider_deformed_t, self.loss_t, self.net_output_t, self.augmented_grid_t], feed_dict
                 )
 
         else:
@@ -873,7 +875,7 @@ class ZSSR:
 
     def reconstruct_using_ae(self, input, input_n_channel):
         output, variables, _ = create_conv_net(input, 0.8, 3, 3)
-        return output, variables
+        return output, variables, tf.nn.l2_loss(output-input)
         # conv1 = Convolution2D([5, 5, input_n_channel, 32], activation=tf.nn.relu, scope='conv_1')(input)
         # pool1 = MaxPooling(kernel_shape=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='SAME', scope='pool_1')(conv1)
         # conv2 = Convolution2D([5, 5, 32, 32], activation=tf.nn.relu, scope='conv_2')(pool1)
