@@ -1,0 +1,5 @@
+# Ignore images
+**/*.jpg
+**/*.tiff
+**/*.png
+**/*.bmp
