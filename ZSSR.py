@@ -621,7 +621,7 @@ class ZSSR:
                 if k < 4 else np.fliplr(np.rot90(input, k))
 
             # rotate the grid if needed
-            if grid:
+            if grid is not None:
                 # swap axes to match for format of tf.rot90
                 swapped_grid = tf.transpose(grid,[2,3,1,0])[:,:,:,0]
                 # rotate and flip
@@ -630,7 +630,7 @@ class ZSSR:
                 # swap axes back
                 rotated_grid = tf.expand_dims(tf.transpose(rotated_grid,[2,0,1]),0)
 
-            return rotated_input, rotated_grid if grid else None
+            return rotated_input, rotated_grid if grid is not None else None
 
         # deform the guiding image
         deformed_gi = self.sess.run(
@@ -647,21 +647,17 @@ class ZSSR:
         # We need to check if scale factor is symmetric to all dimensions, if not we will do 180 jumps rather than 90
         for k in range(0, 1 + 7 * self.conf.output_flip, 1 + int(self.sf[0] != self.sf[1])):
 
-            B, H, W, C = (1, self.gi.shape[0], self.gi.shape[1], 3)
-            sampler_grid = tf.Variable(initial_value=generic_grid_generator(H, W, B))
-            test_input, test_grid = rotate_and_flip(self.input, k, grid=sampler_grid if self.gi is not None else None)
-
-            # I don't know why we need this model line.
-            # probably because TF is garbage
             if self.gi is not None:
-                with self.model.as_default():
-                    augmented_gi = generic_transformer(
+                B, H, W, C = (1, self.gi.shape[0], self.gi.shape[1], 3)
+                sampler_grid = generic_grid_generator(H, W, B)
+                test_input, test_grid = rotate_and_flip(self.input, k, grid=sampler_grid if self.gi is not None else None)
+                augmented_gi = generic_transformer(
                         deformed_gi, test_grid
-                    ).eval(session=self.sess)[0]
+                ).eval(session=tf.Session())[0]
 
-                    # scale to deformed_gi to the right sf
-                    # TODO: should we clip?
-                    augmented_gi = imresize(augmented_gi,
+                # scale to deformed_gi to the right sf
+                # TODO: should we clip?
+                augmented_gi = imresize(augmented_gi,
                                         scale_factor=self.sf*self.base_sf/self.conf.scale_factors[-1],
                                         kernel=self.conf.downscale_gt_method)
 

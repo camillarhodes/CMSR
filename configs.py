@@ -89,7 +89,7 @@ X2_ONE_JUMP_IDEAL_CONF.input_path = os.path.dirname(__file__) + '/set14'
 
 # [GUY]
 THERMAL_IMAGES_CONF = Config(input_filter_depth=3, output_filter_depth=3, guider_output_filter_depth=3,
-                             depth_guider=6)
+                             depth_guider=3)
 THERMAL_IMAGES_CONF.plot_losses = True
 THERMAL_IMAGES_CONF.crop_size = 48
 THERMAL_IMAGES_CONF.max_iters = 800
@@ -110,7 +110,7 @@ THERMAL_IMAGES_CONF.base_change_sfs = [[2.0, 2.0]]  # list of pairs (vertical, h
 #THERMAL_IMAGES_CONF.scale_factors = [[4.0, 4.0]]  # list of pairs (vertical, horizontal) for gradual increments in resolution
 THERMAL_IMAGES_CONF.learning_rate_cpab_ratio = 10
 THERMAL_IMAGES_CONF.learning_rate_affine_ratio = 5
-THERMAL_IMAGES_CONF.learning_rate_tps_ratio = 1
+THERMAL_IMAGES_CONF.learning_rate_tps_ratio = 0.25
 THERMAL_IMAGES_CONF.learning_rate_guider_ratio = 1
 THERMAL_IMAGES_CONF.cpab_tessalation_ncx = 4
 THERMAL_IMAGES_CONF.cpab_tessalation_ncy = 4
