@@ -73,8 +73,8 @@ class Config:
         self.filter_shape = ([[3, 3, input_filter_depth, self.width]] +
                              [[3, 3, self.width, self.width]] * (self.depth-2) +
                              [[3, 3, self.width, output_filter_depth]])
-        self.filter_shape_guider = ([[5, 5, guider_filter_depth, self.width]] +
-                             [[3, 3, self.width, self.width]] * (self.depth_guider-2) +
+        self.filter_shape_guider = ([[1, 1, guider_filter_depth, self.width]] +
+                             [[1, 1, self.width, self.width]] * (self.depth_guider-2) +
                              [[1, 1, self.width, guider_output_filter_depth]])
 
 
@@ -103,14 +103,14 @@ THERMAL_IMAGES_CONF.input_path = os.path.dirname(__file__) + '/ULB17-VT'
 #THERMAL_IMAGES_CONF.scale_factors = [[2.0, 2.0], [4.0, 4.0]]
 # THERMAL_IMAGES_CONF.input_path = os.path.dirname(__file__) + '/Maagad_reg2'
 THERMAL_IMAGES_CONF.img_ext = 'png'
-THERMAL_IMAGES_CONF.guiding_img_ext = 'png'
+THERMAL_IMAGES_CONF.guiding_img_ext = 'None'
 THERMAL_IMAGES_CONF.scale_factors = [[2.0, 2.0], [4.0, 4.0]]  # list of pairs (vertical, horizontal) for gradual increments in resolution
 THERMAL_IMAGES_CONF.back_projection_iters = [6, 10]
 THERMAL_IMAGES_CONF.base_change_sfs = [[2.0, 2.0]]  # list of pairs (vertical, horizontal) for gradual increments in resolution
 #THERMAL_IMAGES_CONF.scale_factors = [[4.0, 4.0]]  # list of pairs (vertical, horizontal) for gradual increments in resolution
-THERMAL_IMAGES_CONF.learning_rate_cpab_ratio = 10
-THERMAL_IMAGES_CONF.learning_rate_affine_ratio = 5
-THERMAL_IMAGES_CONF.learning_rate_tps_ratio = 0.25
+THERMAL_IMAGES_CONF.learning_rate_cpab_ratio = 1
+THERMAL_IMAGES_CONF.learning_rate_affine_ratio = 2
+THERMAL_IMAGES_CONF.learning_rate_tps_ratio = 0.1
 THERMAL_IMAGES_CONF.learning_rate_guider_ratio = 1
 THERMAL_IMAGES_CONF.cpab_tessalation_ncx = 4
 THERMAL_IMAGES_CONF.cpab_tessalation_ncy = 4

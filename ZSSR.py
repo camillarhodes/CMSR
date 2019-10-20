@@ -157,7 +157,7 @@ class ZSSR:
                 self.gt is not None and
                 self.sf is not None and
                 np.any(np.abs(self.sf - self.conf.scale_factors[-1]) > 0.01)
-            ) else None
+            ) else (None, )
 
             # Initialize network weights and meta parameters
             self.init_sess(init_weights=self.conf.init_net_for_each_sf)
@@ -317,11 +317,11 @@ class ZSSR:
 
                 # Define the concatenation layer
                 #concat_layer = tf.concat([self.lr_son_t, self.layers_t_guider[-1]], 3, name ='concat_layer')
-                concat_layer = None
 
 
             # Define first layer
-            first_layer = concat_layer if concat_layer is not None else self.lr_son_t
+            # first_layer = concat_layer if concat_layer is not None else self.lr_son_t
+            first_layer = self.lr_son_t
 
             # Filters
             self.filters_t = [tf.get_variable(shape=meta.filter_shape[ind], name='filter_%d' % ind,
@@ -349,7 +349,9 @@ class ZSSR:
             self.loss_before_guider_t = tf.reduce_mean(tf.reshape(tf.abs(self.net_output_before_guider_t - self.hr_father_t), [-1]))
 
             # Output image including guider
-            self.net_output_t = self.net_output_before_guider_t + self.layers_t_guider[-1]
+            self.net_output_t = self.net_output_before_guider_t
+            if self.gi is not None:
+                self.net_output_t += self.layers_t_guider[-1]
 
             # Very final loss
             self.loss_t = tf.reduce_mean(tf.reshape(tf.abs(self.net_output_t - self.hr_father_t), [-1]))
@@ -363,11 +365,11 @@ class ZSSR:
 
             self.train_op = optimizer.minimize(self.loss_before_guider_t, var_list=self.filters_t)
 
-            # train guider layers and ae layers
-            self.train_guider_op = guider_optimizer.minimize(self.loss_t, var_list=unet_vars+self.filters_t_guider)
-            self.train_ae_op = guider_optimizer.minimize(self.loss_ae, var_list=unet_vars)
-
             if self.gi is not None:
+                # train guider layers and ae layers
+                self.train_guider_op = guider_optimizer.minimize(self.loss_t, var_list=unet_vars+self.filters_t_guider)
+                self.train_ae_op = guider_optimizer.minimize(self.loss_ae, var_list=unet_vars)
+
                 self.train_tps_op = tps_optimizer.minimize(self.loss_t, var_list=[self.theta_tps_t])
                 self.train_affine_op = affine_optimizer.minimize(self.loss_t, var_list=[self.theta_affine_t])
                 self.train_cpab_op = cpab_optimizer.minimize(self.loss_t, var_list=[self.theta_cpab_t])
@@ -650,7 +652,10 @@ class ZSSR:
             if self.gi is not None:
                 B, H, W, C = (1, self.gi.shape[0], self.gi.shape[1], 3)
                 sampler_grid = generic_grid_generator(H, W, B)
-                test_input, test_grid = rotate_and_flip(self.input, k, grid=sampler_grid if self.gi is not None else None)
+
+            test_input, test_grid = rotate_and_flip(self.input, k, grid=sampler_grid if self.gi is not None else None)
+
+            if self.gi is not None:
                 augmented_gi = generic_transformer(
                         deformed_gi, test_grid
                 ).eval(session=tf.Session())[0]
