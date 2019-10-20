@@ -305,23 +305,10 @@ class ZSSR:
                 # Define guider layers
                 self.layers_t_guider = [self.hr_guider_augmented_t] + [None] * meta.depth_guider
 
-                for l in range(meta.depth_guider - 1):
-                    self.layers_t_guider[l + 1] = tf.nn.relu(tf.nn.conv2d(self.layers_t_guider[l], self.filters_t_guider[l],
-                                                                [1, 1, 1, 1], "SAME", name='layer_guider_%d' % (l + 1)))
-                # Last conv layer (Separate because no ReLU here)
-                l = meta.depth_guider - 1
+                for l in range(meta.depth_guider):
+                    self.layers_t_guider[l + 1] = tf.nn.conv2d(self.layers_t_guider[l], self.filters_t_guider[l],
+                                                                [1, 1, 1, 1], "SAME", name='layer_guider_%d' % (l + 1))
 
-                self.layers_t_guider[l+1] = tf.nn.conv2d(self.layers_t_guider[l], self.filters_t_guider[l],
-                                              [1, 1, 1, 1], "SAME", name='layer_guider_%d' % (l + 1))
-
-
-                # Define the concatenation layer
-                #concat_layer = tf.concat([self.lr_son_t, self.layers_t_guider[-1]], 3, name ='concat_layer')
-
-
-            # Define first layer
-            # first_layer = concat_layer if concat_layer is not None else self.lr_son_t
-            first_layer = self.lr_son_t
 
             # Filters
             self.filters_t = [tf.get_variable(shape=meta.filter_shape[ind], name='filter_%d' % ind,
@@ -331,7 +318,7 @@ class ZSSR:
                               for ind in range(meta.depth)]
 
             # Define layers
-            self.layers_t = [first_layer] + [None] * meta.depth
+            self.layers_t = [self.lr_son_t] + [None] * meta.depth
 
             for l in range(meta.depth - 1):
                 self.layers_t[l + 1] = tf.nn.relu(tf.nn.conv2d(self.layers_t[l], self.filters_t[l],
@@ -350,6 +337,7 @@ class ZSSR:
 
             # Output image including guider
             self.net_output_t = self.net_output_before_guider_t
+
             if self.gi is not None:
                 self.net_output_t += self.layers_t_guider[-1]
 
@@ -421,9 +409,6 @@ class ZSSR:
                 'augmentation_output_shape:0': interpolated_lr_son.shape[:2]
             }
             fetch_args = [self.train_op, self.train_guider_op, self.train_tps_op, self.train_affine_op, self.train_cpab_op, self.hr_guider_augmented_t, self.hr_guider_deformed_t, self.loss_t, self.net_output_t]
-
-            # train unet to reconstruct only for few iterations
-            fetch_args = [self.train_ae_op] * (self.iter < self.conf.train_ae_iters) + fetch_args
             *_, self.hr_guider_augmented, self.hr_guider_deformed, self.loss[self.iter], train_output = \
                 self.sess.run(
                     fetch_args, feed_dict
@@ -829,5 +814,5 @@ class ZSSR:
         return displacement_map
 
     def reconstruct_using_unet(self, input, input_n_channel):
-        output, variables, _ = create_conv_net(input, 0.8, 3, 3)
+        output, variables, _ = create_conv_net(input, 1, 3, 3)
         return output, variables, tf.nn.l2_loss(output-input)
