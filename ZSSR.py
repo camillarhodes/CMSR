@@ -157,7 +157,7 @@ class ZSSR:
                 self.gt is not None and
                 self.sf is not None and
                 np.any(np.abs(self.sf - self.conf.scale_factors[-1]) > 0.01)
-            ) else (None, )
+            ) else (self.gt, )
 
             # Initialize network weights and meta parameters
             self.init_sess(init_weights=self.conf.init_net_for_each_sf)
