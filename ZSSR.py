@@ -462,7 +462,6 @@ class ZSSR:
                 )
 
             # train feedback
-            import ipdb; ipdb.set_trace()
             interpolated_lr_son = imresize(self.input, self.sf, self.output_shape if self.gi is not None else None, self.conf.upscale_method)
             feed_dict = {
                 'learning_rate:0': self.learning_rate,
