@@ -262,25 +262,25 @@ class ZSSR:
                 self.augmentation_mat_guider.set_shape([8])
 
                 # convert guider to feature map using AE
-                self.hr_guider_features_t, unet_vars, self.loss_ae = self.reconstruct_using_unet(self.hr_guider_with_shape_t, input_n_channel=self.gi.shape[-1])
+                # self.hr_guider_features_t, unet_vars, self.loss_ae = self.reconstruct_using_unet(self.hr_guider_with_shape_t, input_n_channel=self.gi.shape[-1])
 
-                def get_features_guider():
-                    return self.hr_guider_features_t
+                # def get_features_guider():
+                #     return self.hr_guider_features_t
 
                 def get_original_guider():
                     return self.hr_guider_t
 
-                self.hr_guider_features_t = tf.cond(should_deform_and_augment_guider, get_features_guider, get_original_guider)
+                # self.hr_guider_features_t = tf.cond(should_deform_and_augment_guider, get_features_guider, get_original_guider)
 
                 def get_deformed_guider():
                     # the shape was lost (changed to unknown), recover it
-                    self.hr_guider_features_t.set_shape(self.hr_guider_with_shape_t.get_shape())
+                    # self.hr_guider_features_t.set_shape(self.hr_guider_with_shape_t.get_shape())
 
                     # TPS / affine transform
                     return tps_layer(
                         cpab_layer(
                             affine_layer(
-                                self.hr_guider_features_t, self.theta_affine_t, self.gi.shape[:2]
+                                self.hr_guider_with_shape_t, self.theta_affine_t, self.gi.shape[:2]
                             ), self.theta_cpab_t, self.gi.shape[:2]
                         ), self.theta_tps_t, self.gi.shape[:2]
                     )
@@ -306,6 +306,7 @@ class ZSSR:
                 self.layers_t_guider = [self.hr_guider_augmented_t] + [None] * meta.depth_guider
 
                 for l in range(meta.depth_guider):
+                    # relu?
                     self.layers_t_guider[l + 1] = tf.nn.conv2d(self.layers_t_guider[l], self.filters_t_guider[l],
                                                                 [1, 1, 1, 1], "SAME", name='layer_guider_%d' % (l + 1))
 
@@ -355,8 +356,8 @@ class ZSSR:
 
             if self.gi is not None:
                 # train guider layers and ae layers
-                self.train_guider_op = guider_optimizer.minimize(self.loss_t, var_list=unet_vars+self.filters_t_guider)
-                self.train_ae_op = guider_optimizer.minimize(self.loss_ae, var_list=unet_vars)
+                self.train_guider_op = guider_optimizer.minimize(self.loss_t, var_list=self.filters_t_guider)
+                # self.train_ae_op = guider_optimizer.minimize(self.loss_ae, var_list=unet_vars)
 
                 self.train_tps_op = tps_optimizer.minimize(self.loss_t, var_list=[self.theta_tps_t])
                 self.train_affine_op = affine_optimizer.minimize(self.loss_t, var_list=[self.theta_affine_t])
@@ -571,15 +572,11 @@ class ZSSR:
             # run network forward and back propagation, one iteration (This is the heart of the training)
             self.train_output = self.forward_backward_pass(self.lr_son, self.hr_father, self.hr_guider, chosen_augmentation_guider)
 
-            self.sr = self.forward_pass(self.input, self.gi, self.output_shape if self.gi is not None else None)
-            small_sr = self.father_to_son(self.sr)
-            feedback_loss=tf.reduce_mean(tf.reshape(tf.abs(self.input - small_sr), [-1])).eval(session=tf.Session())
-
             # Display info and save weights
             if not self.iter % self.conf.display_every:
                 print(
                     'sf:', self.sf*self.base_sf, ', iteration: ', self.iter,
-                    ', loss: ', self.loss[self.iter], ', feedback_loss: ', feedback_loss
+                    ', loss: ', self.loss[self.iter],
                 )
 
             # Test network
@@ -818,6 +815,6 @@ class ZSSR:
 
         return displacement_map
 
-    def reconstruct_using_unet(self, input, input_n_channel):
-        output, variables, _ = create_conv_net(input, 1, 3, 3)
-        return output, variables, tf.nn.l2_loss(output-input)
+    # def reconstruct_using_unet(self, input, input_n_channel):
+    #     output, variables, _ = create_conv_net(input, 1, 3, 3)
+    #     return output, variables, tf.nn.l2_loss(output-input)
