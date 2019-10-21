@@ -378,6 +378,16 @@ class ZSSR:
             self.net_output_t = self.net_output_before_guider_t + self.layers_t_guider[-1]
             self.loss_t = tf.reduce_mean(tf.reshape(tf.abs(self.net_output_t - self.hr_father_t), [-1]))
 
+
+            self.lr_son_small_t = tf.placeholder(tf.float32, name='lr_son_small')
+            net_output_reshaped_t = tf.reshape(self.net_output_t,[1,240,320,3])
+            # self.rs=self.net_output_t_reshaped.op
+            self.net_output_small_t = tf.contrib.image.transform(
+                net_output_reshaped_t, [0.25, 0, 0, 0, 0.25, 0, 0, 0] , interpolation='BILINEAR', output_shape=(60, 80)
+            )
+
+            self.loss_feedback_t = tf.reduce_mean(tf.reshape(tf.abs(self.net_output_small_t - self.lr_son_small_t), [-1]))
+
             # Apply adam optimizer
             optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate_t)
             # grid_optimizer = tf.compat.v1.train.AdamOptimizer(learning_rate=self.learning_rate_t)
@@ -387,6 +397,7 @@ class ZSSR:
 
             self.train_op = optimizer.minimize(self.loss_before_guider_t, var_list=self.filters_t)
             self.train_guider_op = optimizer.minimize(self.loss_t, var_list=self.filters_t_guider)
+            self.train_guider_feedback_op = optimizer.minimize(self.loss_feedback_t, var_list=self.filters_t_guider)
 
             if self.gi is not None:
                 # self.train_grid_op = grid_optimizer.minimize(self.loss_t, var_list=[self.gi_grid])
@@ -449,6 +460,24 @@ class ZSSR:
                     # [self.theta_affine_t, self.train_op, self.train_affine_op, self.train_tps_op, self.hr_guider_augmented_t, self.hr_guider_deformed_t, self.loss_t, self.loss_rec_t, self.net_output_t, self.augmented_grid_t], feed_dict
                     [self.train_op, self.train_guider_op, self.train_tps_op, self.train_affine_op, self.train_cpab_op, self.hr_guider_augmented_t, self.hr_guider_deformed_t, self.loss_t, self.net_output_t, self.augmented_grid_t], feed_dict
                 )
+
+            # train feedback
+            import ipdb; ipdb.set_trace()
+            interpolated_lr_son = imresize(self.input, self.sf, self.output_shape if self.gi is not None else None, self.conf.upscale_method)
+            feed_dict = {
+                'learning_rate:0': self.learning_rate,
+                'lr_son:0': np.expand_dims(interpolated_lr_son, 0),
+                'lr_son_small:0': np.expand_dims(self.input, 0),
+                'hr_guider:0': np.expand_dims(hr_guider, 0),
+                'augmentation_mat_grid:0': np.array([1, 0, 0, 0, 1, 0, 0, 0]),
+                'augmentation_output_shape:0': self.gi.shape[:2]
+            }
+            _1, _2 = \
+                self.sess.run(
+                    # [self.theta_affine_t, self.train_op, self.train_affine_op, self.train_tps_op, self.hr_guider_augmented_t, self.hr_guider_deformed_t, self.loss_t, self.loss_rec_t, self.net_output_t, self.augmented_grid_t], feed_dict
+                    [self.train_guider_feedback_op, self.loss_feedback_t], feed_dict
+                )
+
 
         else:
             feed_dict = {
