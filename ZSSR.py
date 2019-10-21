@@ -396,8 +396,8 @@ class ZSSR:
             cpab_optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate_t * self.conf.learning_rate_cpab_ratio)
 
             self.train_op = optimizer.minimize(self.loss_before_guider_t, var_list=self.filters_t)
-            #self.train_guider_op = optimizer.minimize(self.loss_t, var_list=self.filters_t_guider)
-            self.train_guider_feedback_op = optimizer.minimize(self.loss_feedback_t, var_list=self.filters_t_guider)
+            self.train_guider_op = optimizer.minimize(self.loss_t, var_list=self.filters_t_guider)
+            #self.train_guider_feedback_op = optimizer.minimize(self.loss_feedback_t, var_list=self.filters_t_guider)
 
             if self.gi is not None:
                 # self.train_grid_op = grid_optimizer.minimize(self.loss_t, var_list=[self.gi_grid])
@@ -455,10 +455,10 @@ class ZSSR:
                 'augmentation_output_shape:0': interpolated_lr_son.shape[:2]
             }
             # theta, _1, _2, _3, self.hr_guider_augmented, self.hr_guider_deformed, self.loss[self.iter], self.loss_rec[self.iter], train_output, self.augmented_grid = \
-            _1, self.hr_guider_augmented, self.hr_guider_deformed, self.loss[self.iter], train_output, self.augmented_grid = \
+            _1, _2, self.hr_guider_augmented, self.hr_guider_deformed, self.loss[self.iter], train_output, self.augmented_grid = \
                 self.sess.run(
                     # [self.theta_affine_t, self.train_op, self.train_affine_op, self.train_tps_op, self.hr_guider_augmented_t, self.hr_guider_deformed_t, self.loss_t, self.loss_rec_t, self.net_output_t, self.augmented_grid_t], feed_dict
-                    [self.train_op, self.hr_guider_augmented_t, self.hr_guider_deformed_t, self.loss_t, self.net_output_t, self.augmented_grid_t], feed_dict
+                    [self.train_op, self.train_guider_op, self.hr_guider_augmented_t, self.hr_guider_deformed_t, self.loss_t, self.net_output_t, self.augmented_grid_t], feed_dict
                 )
 
             # train feedback
@@ -471,10 +471,10 @@ class ZSSR:
                 'augmentation_mat_grid:0': np.array([1, 0, 0, 0, 1, 0, 0, 0]),
                 'augmentation_output_shape:0': self.gi.shape[:2]
             }
-            _1, _2, _3, _4, _5 = \
+            _2, _3, _4, _5 = \
                 self.sess.run(
                     # [self.train_affine_op, self.train_tps_op, self.hr_guider_augmented_t, self.hr_guider_deformed_t, self.loss_t, self.loss_rec_t, self.net_output_t, self.augmented_grid_t], feed_dict
-                    [self.train_guider_feedback_op, self.loss_feedback_t, self.train_tps_op, self.train_affine_op, self.train_cpab_op], feed_dict
+                    [self.loss_feedback_t, self.train_tps_op, self.train_affine_op, self.train_cpab_op], feed_dict
                 )
 
 
