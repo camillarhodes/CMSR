@@ -570,11 +570,16 @@ class ZSSR:
 
             # run network forward and back propagation, one iteration (This is the heart of the training)
             self.train_output = self.forward_backward_pass(self.lr_son, self.hr_father, self.hr_guider, chosen_augmentation_guider)
+
+            self.sr = self.forward_pass(self.input, self.gi, self.output_shape if self.gi is not None else None)
+            small_sr = self.father_to_son(self.sr)
+            feedback_loss=tf.reduce_mean(tf.reshape(tf.abs(self.input - small_sr), [-1])).eval(session=tf.Session())
+
             # Display info and save weights
             if not self.iter % self.conf.display_every:
                 print(
                     'sf:', self.sf*self.base_sf, ', iteration: ', self.iter,
-                    ', loss: ', self.loss[self.iter],
+                    ', loss: ', self.loss[self.iter], ', feedback_loss: ', feedback_loss
                 )
 
             # Test network
