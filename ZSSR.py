@@ -70,7 +70,6 @@ class ZSSR:
     filters_t_guider = None
     layers_t = None
     layers_t_guider = None
-    coef_t_guider = None
     layers_t_localisation = None
     net_output_t = None
     loss_t = None
@@ -300,11 +299,8 @@ class ZSSR:
                 # guider_with_shape_t = generic_transformer(guider_with_shape_t, self.gi_grid)
                 # return guider_with_shape_t
 
-                self.coef_t_guider = tf.Variable(initial_value=np.ones_like(self.gi), dtype=tf.float32)
-
                 def get_deformed_guider():
                     guider_with_shape_t = tf.assign(self.hr_guider_with_shape_t, self.hr_guider_t)
-                    guider_with_shape_t = tf.multiply(guider_with_shape_t, self.coef_t_guider)
 
 
                     # TPS / affine transform
@@ -388,13 +384,11 @@ class ZSSR:
             tps_optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate_t * self.conf.learning_rate_tps_ratio)
             affine_optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate_t * self.conf.learning_rate_affine_ratio)
             cpab_optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate_t * self.conf.learning_rate_cpab_ratio)
-            guider_coef_optimizer =tf.train.AdamOptimizer(learning_rate=self.learning_rate_t * 100)
 
             self.train_op = optimizer.minimize(self.loss_before_guider_t, var_list=self.filters_t)
             self.train_guider_op = optimizer.minimize(self.loss_t, var_list=self.filters_t_guider)
 
             if self.gi is not None:
-                self.train_guider_coef = guider_coef_optimizer.minimize(self.loss_t, var_list=[self.coef_t_guider])
                 # self.train_grid_op = grid_optimizer.minimize(self.loss_t, var_list=[self.gi_grid])
                 self.train_tps_op = tps_optimizer.minimize(self.loss_t, var_list=[self.theta_tps_t])
                 self.train_affine_op = affine_optimizer.minimize(self.loss_t, var_list=[self.theta_affine_t])
