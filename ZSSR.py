@@ -305,10 +305,15 @@ class ZSSR:
                 # Define guider layers
                 self.layers_t_guider = [self.hr_guider_augmented_t] + [None] * meta.depth_guider
 
-                for l in range(meta.depth_guider):
+                for l in range(meta.depth_guider - 1):
                     # relu?
-                    self.layers_t_guider[l + 1] = tf.nn.conv2d(self.layers_t_guider[l], self.filters_t_guider[l],
-                                                                [1, 1, 1, 1], "SAME", name='layer_guider_%d' % (l + 1))
+                    self.layers_t_guider[l + 1] = tf.nn.relu(tf.nn.conv2d(self.layers_t_guider[l], self.filters_t_guider[l],
+                                                                [1, 1, 1, 1], "SAME", name='layer_guider_%d' % (l + 1)))
+                l = meta.depth_guider - 1
+                self.layers_t_guider[l+1] = tf.nn.conv2d(self.layers_t_guider[l], self.filters_t_guider[l],
+                                             [1, 1, 1, 1], "SAME", name='layer_guider_%d' % (l + 1))
+
+
 
 
             # Filters

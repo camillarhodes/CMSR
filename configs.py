@@ -64,17 +64,18 @@ class Config:
 
     def __init__(self, input_filter_depth=3, output_filter_depth=3,
                  guider_filter_depth=3, guider_output_filter_depth=3,
-                 width=64, depth=8, depth_guider=8):
+                 width=64, width_guider=16, depth=8, depth_guider=8):
         self.width = width
+        self.width_guider = width_guider
         self.depth = depth
         self.depth_guider = depth_guider
         # network meta params that by default are determined (by other params) by other params but can be changed
         self.filter_shape = ([[3, 3, input_filter_depth, self.width]] +
                              [[3, 3, self.width, self.width]] * (self.depth-2) +
                              [[3, 3, self.width, output_filter_depth]])
-        self.filter_shape_guider = ([[3, 3, guider_filter_depth, self.width]] +
-                             [[3, 3, self.width, self.width]] * (self.depth_guider-2) +
-                             [[3, 3, self.width, guider_output_filter_depth]])
+        self.filter_shape_guider = ([[3, 3, guider_filter_depth, width_guider]] +
+                             [[3, 3, width_guider, width_guider]] * (self.depth_guider-2) +
+                             [[3, 3, width_guider, guider_output_filter_depth]])
 
 
 ########################################
@@ -87,15 +88,15 @@ X2_ONE_JUMP_IDEAL_CONF = Config()
 X2_ONE_JUMP_IDEAL_CONF.input_path = os.path.dirname(__file__) + '/set14'
 
 # [GUY]
-THERMAL_IMAGES_CONF = Config(input_filter_depth=3, output_filter_depth=3, guider_output_filter_depth=3,
-                             depth_guider=4)
+THERMAL_IMAGES_CONF = Config(input_filter_depth=1, guider_filter_depth=3, output_filter_depth=1, guider_output_filter_depth=1,
+                             depth_guider=3)
 THERMAL_IMAGES_CONF.plot_losses = True
 THERMAL_IMAGES_CONF.crop_size = 48
 THERMAL_IMAGES_CONF.max_iters = 800
 THERMAL_IMAGES_CONF.run_test_every = 20
 THERMAL_IMAGES_CONF.display_every = 1
 # THERMAL_IMAGES_CONF.input_path = os.path.dirname(__file__) + '/data_processed/current3'
-THERMAL_IMAGES_CONF.input_path = os.path.dirname(__file__) + '/ULB17-VT/111'
+THERMAL_IMAGES_CONF.input_path = os.path.dirname(__file__) + '/ULB17-VT/benchmark'
 # THERMAL_IMAGES_CONF.img_ext = 'tiff'
 # THERMAL_IMAGES_CONF.guiding_img_ext = 'jpg'
 #THERMAL_IMAGES_CONF.scale_factors = [[2.0, 2.0], [4.0, 4.0]]
