@@ -252,7 +252,7 @@ def remove_n_channels_dim(*images):
 def normalize_images(*images):
     def _normalize(img):
         if img is not None:
-            img = img.astype(float)[:,:,:3]
+            img = img.astype(np.float64)[:,:,:3]
             return img
             # dont scale! it causes varying averages in different images
             # return (img - np.min(img))/(np.max(img) - np.min(img))
