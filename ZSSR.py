@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 import matplotlib.image as img
 import ipdb
 import signal
+import cv2
 
 from matplotlib.gridspec import GridSpec
 from configs import Config
@@ -10,7 +11,6 @@ from utils import *
 from generic_stn import generic_grid_generator, generic_spatial_transformer_network as generic_transformer
 from ddtn.transformers.transformer_util import get_transformer_layer, get_transformer_dim, get_transformer_init_weights
 from ddtn.transformers.setup_CPAB_transformer import setup_CPAB_transformer
-from tf_unet.unet import create_conv_net
 
 
 class ZSSR:
@@ -181,12 +181,13 @@ class ZSSR:
 
                 post_processed_output, = remove_n_channels_dim(post_processed_output)
 
-                plt.imsave('%s/%s_zssr_%s.%s' %
+
+                # plt.imsave('%s/%s_zssr_%s.%s' %
+                #            (self.conf.result_path, os.path.basename(self.file_name)[:-4], sf_str, self.conf.img_ext),
+                #            post_processed_output, vmin=0, vmax=1, cmap=self.conf.cmap)
+                cv2.imwrite('%s/%s_zssr_%s.%s' %
                            (self.conf.result_path, os.path.basename(self.file_name)[:-4], sf_str, self.conf.img_ext),
-                           post_processed_output, vmin=0, vmax=1, cmap=self.conf.cmap)
-                # cv2.imwrite('%s/%s_zssr_%s.png' %
-                #            (self.conf.result_path, os.path.basename(self.file_name)[:-4], sf_str),
-                #            post_processed_output * 255)
+                           post_processed_output * 255)
 
             # verbose
             print('** Done training for sf=', sf, ' **')
@@ -503,8 +504,8 @@ class ZSSR:
         #TODO: do something less ugly
         if self.gt_per_sf is not None and self.gt_per_sf.shape[2] == 1:
             self.gt_per_sf, = remove_n_channels_dim(self.gt_per_sf)
-        self.mse = self.mse + [np.mean(np.ndarray.flatten(np.square(self.gt_per_sf - self.sr)))
-                    if self.gt_per_sf is not None else None]
+
+        self.mse = self.mse + [np.mean(np.ndarray.flatten(np.square(self.gt_per_sf - self.sr))) if self.gt_per_sf is not None else None]
 
         # 2. Reconstruction MSE, run for reconstruction- try to reconstruct the input from a downscaled version of it
         self.reconstruct_output = self.forward_pass(self.father_to_son(self.input), self.gi, self.input.shape)
@@ -819,7 +820,3 @@ class ZSSR:
         # displacement_map[:,:,1] /= (np.max(displacement_map[:,:,1]) / 255)
 
         return displacement_map
-
-    # def reconstruct_using_unet(self, input, input_n_channel):
-    #     output, variables, _ = create_conv_net(input, 1, 3, 3)
-    #     return output, variables, tf.nn.l2_loss(output-input)
