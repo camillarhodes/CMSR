@@ -93,7 +93,7 @@ THERMAL_IMAGES_CONF = Config(input_filter_depth=1, guider_filter_depth=3, output
 THERMAL_IMAGES_CONF.plot_losses = True
 THERMAL_IMAGES_CONF.crop_size = 48
 THERMAL_IMAGES_CONF.max_iters = 800
-THERMAL_IMAGES_CONF.run_test_every = 100
+THERMAL_IMAGES_CONF.run_test_every = 50
 THERMAL_IMAGES_CONF.display_every = 10
 THERMAL_IMAGES_CONF.input_path = os.path.dirname(__file__) + '/ULB17-VT/Valid'
 THERMAL_IMAGES_CONF.img_ext = 'png'
