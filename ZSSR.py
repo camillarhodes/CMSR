@@ -156,7 +156,8 @@ class ZSSR:
             )) if (
                 self.gt is not None and
                 self.sf is not None and
-                np.any(np.abs(self.sf - self.conf.scale_factors[-1]) > 0.01)
+                (np.any(np.abs(self.sf - self.conf.scale_factors[-1]) > 0.01) or
+                 self.gt.shape != self.output_shape)
             ) else (self.gt, )
 
             # Initialize network weights and meta parameters
@@ -197,6 +198,7 @@ class ZSSR:
         return post_processed_output
 
     def build_network(self, meta):
+        tf.reset_default_graph()
         with self.model.as_default():
 
             # Learning rate tensor
