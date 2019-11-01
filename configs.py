@@ -135,6 +135,8 @@ DEPTH_MAPS_CONF.learning_rate_cpab_ratio = 1
 DEPTH_MAPS_CONF.learning_rate_affine_ratio = 2
 DEPTH_MAPS_CONF.learning_rate_tps_ratio = 0.5
 DEPTH_MAPS_CONF.learning_rate_guider_ratio = 1
+DEPTH_MAPS_CONF.cpab_tessalation_ncx = 4
+DEPTH_MAPS_CONF.cpab_tessalation_ncy = 4
 # DEPTH_MAPS_CONF.init_net_for_each_sf = True
 
 # Same as above but with visualization (Recommended for one image, interactive mode, for debugging)
