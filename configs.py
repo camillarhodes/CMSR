@@ -88,7 +88,7 @@ X2_ONE_JUMP_IDEAL_CONF = Config()
 X2_ONE_JUMP_IDEAL_CONF.input_path = os.path.dirname(__file__) + '/set14'
 
 # [GUY]
-THERMAL_IMAGES_CONF = Config(input_filter_depth=3, guider_filter_depth=3, output_filter_depth=3, guider_output_filter_depth=3,
+THERMAL_IMAGES_CONF = Config(input_filter_depth=1, guider_filter_depth=3, output_filter_depth=1, guider_output_filter_depth=1,
                              depth_guider=4)
 THERMAL_IMAGES_CONF.plot_losses = True
 THERMAL_IMAGES_CONF.crop_size = 48
