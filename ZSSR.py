@@ -109,13 +109,11 @@ class ZSSR:
         final_output_shape=np.array(self.input.shape[:2])*self.conf.scale_factors[-1]
 
         gi_shape_equals_output_shape = self.gi is None or all(np.array(self.gi.shape[:2])==final_output_shape)
-        if not gi_shape_equals_output_shape:
-            self.gi = np.clip(
-                imresize(self.gi,
-                         scale_factor=None,
-                         output_shape=final_output_shape,
-                         ), 0, 1
-            )
+        gt_shape_equals_output_shape = self.gt is None or all(np.array(self.gt.shape[:2])==final_output_shape)
+
+        if not gi_shape_equals_output_shape or not gt_shape_equals_output_shape:
+            print("Fix your shapes")
+            return
 
         # Preprocess the kernels. (see function to see what in includes).
         self.kernels = preprocess_kernels(kernels, conf)
@@ -168,8 +166,7 @@ class ZSSR:
             )) if (
                 self.gt is not None and
                 self.sf is not None and
-                (np.any(np.abs(self.sf - self.conf.scale_factors[-1]) > 0.01) or
-                 self.gt.shape != self.output_shape)
+                np.any(np.abs(self.sf - self.conf.scale_factors[-1]) > 0.01)
             ) else (self.gt, )
 
 
