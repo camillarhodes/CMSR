@@ -88,7 +88,7 @@ X2_ONE_JUMP_IDEAL_CONF = Config()
 X2_ONE_JUMP_IDEAL_CONF.input_path = os.path.dirname(__file__) + '/set14'
 
 # [GUY]
-THERMAL_IMAGES_CONF = Config(input_filter_depth=3, guider_filter_depth=3, output_filter_depth=3, guider_output_filter_depth=3,
+THERMAL_IMAGES_CONF = Config(input_filter_depth=1, guider_filter_depth=3, output_filter_depth=1, guider_output_filter_depth=1,
                              depth_guider=4)
 THERMAL_IMAGES_CONF.plot_losses = True
 THERMAL_IMAGES_CONF.crop_size = 64
@@ -102,12 +102,15 @@ THERMAL_IMAGES_CONF.guiding_img_ext = 'png'
 THERMAL_IMAGES_CONF.scale_factors = [[4.0, 4.0]]  # list of pairs (vertical, horizontal) for gradual increments in resolution
 THERMAL_IMAGES_CONF.back_projection_iters = [6, 6]
 # THERMAL_IMAGES_CONF.base_change_sfs = [[2.0, 2.0]]  # list of pairs (vertical, horizontal) for gradual increments in resolution
-THERMAL_IMAGES_CONF.learning_rate_cpab_ratio = 5
+THERMAL_IMAGES_CONF.learning_rate_cpab_ratio = 1
 THERMAL_IMAGES_CONF.learning_rate_affine_ratio = 1
-THERMAL_IMAGES_CONF.learning_rate_tps_ratio = 1
+THERMAL_IMAGES_CONF.learning_rate_tps_ratio = 0.1
 THERMAL_IMAGES_CONF.learning_rate_guider_ratio = 1
 THERMAL_IMAGES_CONF.cpab_tessalation_ncx = 4
 THERMAL_IMAGES_CONF.cpab_tessalation_ncy = 4
+THERMAL_IMAGES_CONF.downscale_method = 'linear'  # a string ('cubic', 'linear'...), has no meaning if kernel given
+THERMAL_IMAGES_CONF.upscale_method = 'linear'  # this is the base interpolation from which we learn the residual (same options as above)
+THERMAL_IMAGES_CONF.downscale_gt_method = 'linear'  # when ground-truth given and intermediate scales tested, we shrink gt to wanted size
 
 # THERMAL_IMAGES_CONF.scale_factors = [[1.0, 1.5], [1.5, 1.0], [1.5, 1.5], [1.5, 2.0], [2.0, 1.5], [2.0, 2.0]]
 # THERMAL_IMAGES_CONF.back_projection_iters = [6, 6, 8, 10, 10, 12]
