@@ -105,6 +105,18 @@ class ZSSR:
         # Normalize images
         self.input, self.gt, self.gi = normalize_images(self.input, self.gt, self.gi)
 
+        # Handle shape adjustments for indivisible shapes
+        final_output_shape=np.array(self.input.shape[:2])*self.conf.scale_factors[-1]
+        gi_shape_equals_output_shape = all(np.array(self.gi.shape[:2])==final_output_shape)
+        if self.gi is not None and not gi_shape_equals_output_shape:
+            self.gi = np.clip(
+                imresize(self.gi,
+                         scale_factor=None,
+                         output_shape=final_output_shape,
+                         kernel=self.conf.downscale_gt_method
+                         ), 0, 1
+            )
+
         # Preprocess the kernels. (see function to see what in includes).
         self.kernels = preprocess_kernels(kernels, conf)
 
@@ -159,6 +171,7 @@ class ZSSR:
                 (np.any(np.abs(self.sf - self.conf.scale_factors[-1]) > 0.01) or
                  self.gt.shape != self.output_shape)
             ) else (self.gt, )
+
 
             # Initialize network weights and meta parameters
             self.init_sess(init_weights=self.conf.init_net_for_each_sf)
