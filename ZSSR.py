@@ -107,13 +107,13 @@ class ZSSR:
 
         # Handle shape adjustments for indivisible shapes
         final_output_shape=np.array(self.input.shape[:2])*self.conf.scale_factors[-1]
-        gi_shape_equals_output_shape = all(np.array(self.gi.shape[:2])==final_output_shape)
-        if self.gi is not None and not gi_shape_equals_output_shape:
+
+        gi_shape_equals_output_shape = self.gi is None or all(np.array(self.gi.shape[:2])==final_output_shape)
+        if not gi_shape_equals_output_shape:
             self.gi = np.clip(
                 imresize(self.gi,
                          scale_factor=None,
                          output_shape=final_output_shape,
-                         kernel=self.conf.downscale_gt_method
                          ), 0, 1
             )
 
