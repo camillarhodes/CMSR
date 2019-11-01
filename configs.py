@@ -131,10 +131,10 @@ DEPTH_MAPS_CONF.back_projection_iters = [6, 6]
 DEPTH_MAPS_CONF.run_test_every = 20
 DEPTH_MAPS_CONF.display_every = 1
 DEPTH_MAPS_CONF.plot_losses = True
-THERMAL_IMAGES_CONF.learning_rate_cpab_ratio = 1
-THERMAL_IMAGES_CONF.learning_rate_affine_ratio = 2
-THERMAL_IMAGES_CONF.learning_rate_tps_ratio = 0.5
-THERMAL_IMAGES_CONF.learning_rate_guider_ratio = 1
+DEPTH_MAPS_CONF.learning_rate_cpab_ratio = 1
+DEPTH_MAPS_CONF.learning_rate_affine_ratio = 2
+DEPTH_MAPS_CONF.learning_rate_tps_ratio = 0.5
+DEPTH_MAPS_CONF.learning_rate_guider_ratio = 1
 # DEPTH_MAPS_CONF.init_net_for_each_sf = True
 
 # Same as above but with visualization (Recommended for one image, interactive mode, for debugging)
