@@ -110,7 +110,7 @@ THERMAL_IMAGES_CONF.cpab_tessalation_ncx = 4
 THERMAL_IMAGES_CONF.cpab_tessalation_ncy = 4
 THERMAL_IMAGES_CONF.downscale_method = 'linear'  # a string ('cubic', 'linear'...), has no meaning if kernel given
 THERMAL_IMAGES_CONF.upscale_method = 'linear'  # this is the base interpolation from which we learn the residual (same options as above)
-THERMAL_IMAGES_CONF.downscale_gt_method = 'linear'  # when ground-truth given and intermediate scales tested, we shrink gt to wanted size
+#THERMAL_IMAGES_CONF.downscale_gt_method = 'linear'  # when ground-truth given and intermediate scales tested, we shrink gt to wanted size
 
 # THERMAL_IMAGES_CONF.scale_factors = [[1.0, 1.5], [1.5, 1.0], [1.5, 1.5], [1.5, 2.0], [2.0, 1.5], [2.0, 2.0]]
 # THERMAL_IMAGES_CONF.back_projection_iters = [6, 6, 8, 10, 10, 12]
