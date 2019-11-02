@@ -118,8 +118,9 @@ THERMAL_IMAGES_CONF.cpab_tessalation_ncy = 4
 # [GUY]
 DEPTH_MAPS_CONF = Config(input_filter_depth=1,
                          output_filter_depth=1,
-                         guider_output_filter_depth=1)
-DEPTH_MAPS_CONF.input_path = os.path.dirname(__file__) + '/Moebius'
+                         guider_output_filter_depth=1,
+                         depth_guider=4)
+DEPTH_MAPS_CONF.input_path = os.path.dirname(__file__) + '/Maagad4'
 DEPTH_MAPS_CONF.crop_size = 48
 DEPTH_MAPS_CONF.img_ext = 'png'
 DEPTH_MAPS_CONF.guiding_img_ext = 'png'
