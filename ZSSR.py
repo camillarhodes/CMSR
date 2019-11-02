@@ -4,6 +4,7 @@ import matplotlib.image as img
 import ipdb
 import signal
 import cv2
+import sys
 
 from matplotlib.gridspec import GridSpec
 from configs import Config
@@ -112,8 +113,7 @@ class ZSSR:
         gt_shape_equals_output_shape = self.gt is None or all(np.array(self.gt.shape[:2])==final_output_shape)
 
         if not gi_shape_equals_output_shape or not gt_shape_equals_output_shape:
-            print("Fix your shapes")
-            return
+            sys.exit("Fix your shapes")
 
         # Preprocess the kernels. (see function to see what in includes).
         self.kernels = preprocess_kernels(kernels, conf)
