@@ -300,30 +300,16 @@ class ZSSR:
 
                 self.hr_guider_deformed_t = tf.cond(should_deform_and_augment_guider, get_deformed_guider, get_original_guider)
 
-                self.filters_t_guider = [tf.get_variable(shape=meta.filter_shape_guider[ind], name='filter_guider_%d' % ind,
-                                               initializer=tf.random_normal_initializer(
-                                                   stddev=np.sqrt(meta.init_variance/np.prod(
-                                                       meta.filter_shape_guider[ind][0:3]))))
-                               for ind in range(meta.depth_guider)]
-
-                # Define guider layers
-                self.layers_t_guider = [self.hr_guider_deformed_t] + [None] * meta.depth_guider
-
-                for l in range(meta.depth_guider - 1):
-                    self.layers_t_guider[l + 1] = tf.nn.relu(tf.nn.conv2d(self.layers_t_guider[l], self.filters_t_guider[l],
-                                                                [1, 1, 1, 1], "SAME", name='layer_guider_%d' % (l + 1)))
-                l = meta.depth_guider - 1
-                self.layers_t_guider[l+1] = tf.nn.conv2d(self.layers_t_guider[l], self.filters_t_guider[l],
-                                             [1, 1, 1, 1], "SAME", name='layer_guider_%d' % (l + 1))
-
                 def get_augmented_guider():
                     # the shape was lost (changed to unknown), recover it
-                    # self.hr_guider_deformed_t.set_shape(self.hr_guider_with_shape_t.get_shape())
+                    self.hr_guider_deformed_t.set_shape(self.hr_guider_with_shape_t.get_shape())
                     return tf.contrib.image.transform(
-                        self.layers_t_guider[-1], self.augmentation_mat_guider, interpolation='BILINEAR', output_shape=self.augmentation_output_shape
+                        self.hr_guider_deformed_t, self.augmentation_mat_guider, interpolation='BILINEAR', output_shape=self.augmentation_output_shape
                     )
 
                 self.hr_guider_augmented_t = tf.cond(should_deform_and_augment_guider, get_augmented_guider, get_original_guider)
+
+
 
 
 
@@ -346,6 +332,22 @@ class ZSSR:
             self.layers_t[l+1] = tf.nn.conv2d(self.layers_t[l], self.filters_t[l],
                                              [1, 1, 1, 1], "SAME", name='layer_%d' % (l + 1))
 
+            self.filters_t_guider = [tf.get_variable(shape=meta.filter_shape_guider[ind], name='filter_guider_%d' % ind,
+                                           initializer=tf.random_normal_initializer(
+                                               stddev=np.sqrt(meta.init_variance/np.prod(
+                                                   meta.filter_shape_guider[ind][0:3]))))
+                           for ind in range(meta.depth_guider)]
+
+            # Define guider layers
+            self.layers_t_guider = [tf.concat([self.hr_guider_augmented_t, self.layers_t[-1]],3)] + [None] * meta.depth_guider
+
+            for l in range(meta.depth_guider - 1):
+                self.layers_t_guider[l + 1] = tf.nn.relu(tf.nn.conv2d(self.layers_t_guider[l], self.filters_t_guider[l],
+                                                            [1, 1, 1, 1], "SAME", name='layer_guider_%d' % (l + 1)))
+            l = meta.depth_guider - 1
+            self.layers_t_guider[l+1] = tf.nn.conv2d(self.layers_t_guider[l], self.filters_t_guider[l],
+                                         [1, 1, 1, 1], "SAME", name='layer_guider_%d' % (l + 1))
+
             # Output image (Add last conv layer result to input, residual learning with global skip connection)
             self.net_output_before_guider_t = self.layers_t[-1] +  self.conf.learn_residual * self.lr_son_t
 
@@ -356,7 +358,7 @@ class ZSSR:
             self.net_output_t = self.net_output_before_guider_t
 
             if self.gi is not None:
-                self.net_output_t += self.hr_guider_augmented_t
+                self.net_output_t += self.layers_t_guider[-1]
 
             # Very final loss
             self.loss_t = tf.reduce_mean(tf.reshape(tf.abs(self.net_output_t - self.hr_father_t), [-1]))
@@ -784,7 +786,7 @@ class ZSSR:
         self.hr_father_image_space.imshow(self.hr_father, vmin=0.0, vmax=1.0, cmap=self.conf.cmap)
 
         if self.hr_guider is not None:
-            self.hr_guider_image_space.imshow(self.hr_guider_augmented[0,:,:,0], vmin=0.0, vmax=1.0, cmap=self.conf.cmap)
+            self.hr_guider_image_space.imshow(self.hr_guider_augmented[0], vmin=0.0, vmax=1.0, cmap=self.conf.cmap)
 
         # These line are needed in order to see the graphics at real time
         self.fig.canvas.draw()
