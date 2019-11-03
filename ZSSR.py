@@ -319,7 +319,6 @@ class ZSSR:
                 self.layers_t_guider = [self.hr_guider_augmented_t] + [None] * meta.depth_guider
 
                 for l in range(meta.depth_guider - 1):
-                    # relu?
                     self.layers_t_guider[l + 1] = tf.nn.relu(tf.nn.conv2d(self.layers_t_guider[l], self.filters_t_guider[l],
                                                                 [1, 1, 1, 1], "SAME", name='layer_guider_%d' % (l + 1)))
                 l = meta.depth_guider - 1
@@ -427,7 +426,7 @@ class ZSSR:
                 'augmentation_mat_guider:0': augmentation_mat_guider,
                 'augmentation_output_shape:0': interpolated_lr_son.shape[:2]
             }
-            fetch_args = [self.train_op, self.train_guider_op, self.train_tps_op, self.train_affine_op, self.train_cpab_op, self.hr_guider_augmented_t, self.hr_guider_deformed_t, self.loss_t, self.net_output_t]
+            fetch_args = [self.layers_t_guider[-1], self.train_op, self.train_guider_op, self.train_tps_op, self.train_affine_op, self.train_cpab_op, self.hr_guider_augmented_t, self.hr_guider_deformed_t, self.loss_t, self.net_output_t]
             *_, self.hr_guider_augmented, self.hr_guider_deformed, self.loss[self.iter], train_output = \
                 self.sess.run(
                     fetch_args, feed_dict
