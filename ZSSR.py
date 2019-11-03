@@ -309,6 +309,21 @@ class ZSSR:
 
                 self.hr_guider_augmented_t = tf.cond(should_deform_and_augment_guider, get_augmented_guider, get_original_guider)
 
+                self.filters_t_guider = [tf.get_variable(shape=meta.filter_shape_guider[ind], name='filter_guider_%d' % ind,
+                                               initializer=tf.random_normal_initializer(
+                                                   stddev=np.sqrt(meta.init_variance/np.prod(
+                                                       meta.filter_shape_guider[ind][0:3]))))
+                               for ind in range(meta.depth_guider)]
+
+                # Define guider layers
+                self.layers_t_guider = [self.hr_guider_augmented_t] + [None] * meta.depth_guider
+
+                for l in range(meta.depth_guider - 1):
+                    self.layers_t_guider[l + 1] = tf.nn.relu(tf.nn.conv2d(self.layers_t_guider[l], self.filters_t_guider[l],
+                                                                [1, 1, 1, 1], "SAME", name='layer_guider_%d' % (l + 1)))
+                l = meta.depth_guider - 1
+                self.layers_t_guider[l+1] = tf.nn.conv2d(self.layers_t_guider[l], self.filters_t_guider[l],
+                                             [1, 1, 1, 1], "SAME", name='layer_guider_%d' % (l + 1))
 
 
 
@@ -321,7 +336,7 @@ class ZSSR:
                               for ind in range(meta.depth)]
 
             # Define layers
-            self.layers_t = [tf.concat([self.lr_son_t, self.hr_guider_augmented_t],3)] + [None] * meta.depth
+            self.layers_t = [self.lr_son_t] + [None] * meta.depth
 
             for l in range(meta.depth - 1):
                 self.layers_t[l + 1] = tf.nn.relu(tf.nn.conv2d(self.layers_t[l], self.filters_t[l],
@@ -332,22 +347,6 @@ class ZSSR:
             self.layers_t[l+1] = tf.nn.conv2d(self.layers_t[l], self.filters_t[l],
                                              [1, 1, 1, 1], "SAME", name='layer_%d' % (l + 1))
 
-            # self.filters_t_guider = [tf.get_variable(shape=meta.filter_shape_guider[ind], name='filter_guider_%d' % ind,
-            #                                initializer=tf.random_normal_initializer(
-            #                                    stddev=np.sqrt(meta.init_variance/np.prod(
-            #                                        meta.filter_shape_guider[ind][0:3]))))
-            #                for ind in range(meta.depth_guider)]
-
-            # # Define guider layers
-            # self.layers_t_guider = [tf.concat([self.hr_guider_augmented_t, self.layers_t[-1]],3)] + [None] * meta.depth_guider
-
-            # for l in range(meta.depth_guider - 1):
-            #     self.layers_t_guider[l + 1] = tf.nn.relu(tf.nn.conv2d(self.layers_t_guider[l], self.filters_t_guider[l],
-            #                                                 [1, 1, 1, 1], "SAME", name='layer_guider_%d' % (l + 1)))
-            # l = meta.depth_guider - 1
-            # self.layers_t_guider[l+1] = tf.nn.conv2d(self.layers_t_guider[l], self.filters_t_guider[l],
-            #                              [1, 1, 1, 1], "SAME", name='layer_guider_%d' % (l + 1))
-
             # Output image (Add last conv layer result to input, residual learning with global skip connection)
             self.net_output_before_guider_t = self.layers_t[-1] +  self.conf.learn_residual * self.lr_son_t
 
@@ -357,15 +356,15 @@ class ZSSR:
             # Output image including guider
             self.net_output_t = self.net_output_before_guider_t
 
-            # if self.gi is not None:
-            #     self.net_output_t += self.layers_t_guider[-1]
+            if self.gi is not None:
+                self.net_output_t += self.layers_t_guider[-1]
 
             # Very final loss
             self.loss_t = tf.reduce_mean(tf.reshape(tf.abs(self.net_output_t - self.hr_father_t), [-1]))
 
             # Apply adam optimizer
             optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate_t)
-            # guider_optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate_t * self.conf.learning_rate_guider_ratio)
+            guider_optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate_t * self.conf.learning_rate_guider_ratio)
             tps_optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate_t * self.conf.learning_rate_tps_ratio)
             affine_optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate_t * self.conf.learning_rate_affine_ratio)
             cpab_optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate_t * self.conf.learning_rate_cpab_ratio)
@@ -374,7 +373,7 @@ class ZSSR:
 
             if self.gi is not None:
                 # train guider layers and ae layers
-                # self.train_guider_op = guider_optimizer.minimize(self.loss_t, var_list=self.filters_t_guider)
+                self.train_guider_op = guider_optimizer.minimize(self.loss_t, var_list=self.filters_t_guider)
                 # self.train_ae_op = guider_optimizer.minimize(self.loss_ae, var_list=unet_vars)
 
                 self.train_tps_op = tps_optimizer.minimize(self.loss_t, var_list=[self.theta_tps_t])
@@ -427,7 +426,7 @@ class ZSSR:
                 'augmentation_mat_guider:0': augmentation_mat_guider,
                 'augmentation_output_shape:0': interpolated_lr_son.shape[:2]
             }
-            fetch_args = [self.train_op, self.train_tps_op, self.train_affine_op, self.train_cpab_op, self.hr_guider_augmented_t, self.hr_guider_deformed_t, self.loss_t, self.net_output_t]
+            fetch_args = [self.train_op, self.train_guider_op, self.train_tps_op, self.train_affine_op, self.train_cpab_op, self.hr_guider_augmented_t, self.hr_guider_deformed_t, self.loss_t, self.net_output_t]
             *_, self.hr_guider_augmented, self.hr_guider_deformed, self.loss[self.iter], train_output = \
                 self.sess.run(
                     fetch_args, feed_dict
@@ -477,7 +476,7 @@ class ZSSR:
             }
 
         # Run network
-        layer, out = self.sess.run([self.layers_t, self.net_output_t], feed_dict)
+        layer, out = self.sess.run([self.layers_t_guider[-1], self.net_output_t], feed_dict)
         return np.clip(np.squeeze(out), 0, 1)
 
     def learning_rate_policy(self):
