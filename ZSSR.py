@@ -426,7 +426,7 @@ class ZSSR:
                 'augmentation_mat_guider:0': augmentation_mat_guider,
                 'augmentation_output_shape:0': interpolated_lr_son.shape[:2]
             }
-            fetch_args = [self.layers_t_guider[-1], self.train_op, self.train_guider_op, self.train_tps_op, self.train_affine_op, self.train_cpab_op, self.hr_guider_augmented_t, self.hr_guider_deformed_t, self.loss_t, self.net_output_t]
+            fetch_args = [self.train_op, self.train_guider_op, self.train_tps_op, self.train_affine_op, self.train_cpab_op, self.hr_guider_augmented_t, self.hr_guider_deformed_t, self.loss_t, self.net_output_t]
             *_, self.hr_guider_augmented, self.hr_guider_deformed, self.loss[self.iter], train_output = \
                 self.sess.run(
                     fetch_args, feed_dict
@@ -476,7 +476,8 @@ class ZSSR:
             }
 
         # Run network
-        return np.clip(np.squeeze(self.sess.run([self.net_output_t], feed_dict)), 0, 1)
+        layer, out = self.sess.run([self.layers_t_guider[-1], self.net_output_t], feed_dict)
+        return np.clip(np.squeeze(out), 0, 1)
 
     def learning_rate_policy(self):
         # fit linear curve and check slope to determine whether to do nothing, reduce learning rate or finish
