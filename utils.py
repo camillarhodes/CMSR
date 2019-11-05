@@ -20,8 +20,7 @@ def random_augment(ims,
                    allow_rotation=True,
                    scale_diff_sigma=0.01,
                    shear_sigma=0.01,
-                   crop_size=128,
-                   should_train_guider=False):
+                   crop_size=128):
     """Takes a random crop of the image and the guiding image.
     Returns:
         1. the image chosen randomly from `ims` list
@@ -52,10 +51,6 @@ def random_augment(ims,
     # In case scale is a list of scales with take the smallest one to be the allowed minimum
     max_scale = np.min([max_scale])
 
-    if should_train_guider:
-        min_scale += 3
-        max_scale += 3
-
     # Determine a random scale by probability
     if mode == 'leave_as_is':
         scale = 1.0
@@ -65,7 +60,7 @@ def random_augment(ims,
     # The image we will use is the smallest one that is bigger than the wanted scale
     # (Using a small value overlap instead of >= to prevent float issues)
     scale_ind, base_scale = next((ind, np.min([base_scale])) for ind, base_scale in enumerate(base_scales)
-                                 if np.min([base_scale]) > scale - 1.0e-6 - 999)
+                                 if np.min([base_scale]) > scale - 1.0e-6)
     im = ims[scale_ind]
 
     # Next are matrices whose multiplication will be the transformation. All are 3x3 matrices.
