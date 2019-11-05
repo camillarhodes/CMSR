@@ -20,7 +20,8 @@ def random_augment(ims,
                    allow_rotation=True,
                    scale_diff_sigma=0.01,
                    shear_sigma=0.01,
-                   crop_size=128):
+                   crop_size=128,
+                   should_train_guider=False):
     """Takes a random crop of the image and the guiding image.
     Returns:
         1. the image chosen randomly from `ims` list
@@ -50,6 +51,10 @@ def random_augment(ims,
 
     # In case scale is a list of scales with take the smallest one to be the allowed minimum
     max_scale = np.min([max_scale])
+
+    if should_train_guider:
+        min_scale += 3
+        max_scale += 3
 
     # Determine a random scale by probability
     if mode == 'leave_as_is':

@@ -403,7 +403,7 @@ class ZSSR:
         self.learning_rate = self.conf.learning_rate
         self.learning_rate_change_iter_nums = [0]
 
-    def forward_backward_pass(self, lr_son, hr_father, hr_guider, augmentation_mat_guider):
+    def forward_backward_pass(self, lr_son, hr_father, hr_guider, augmentation_mat_guider, should_train_guider=False):
         # First gate for the lr-son into the network is interpolation to the size of the father
         # Note: we specify both output_size and scale_factor. best explained by example: say father size is 9 and sf=2,
         # small_son size is 4. if we upscale by sf=2 we get wrong size, if we upscale to size 9 we get wrong sf.
@@ -426,7 +426,11 @@ class ZSSR:
                 'augmentation_mat_guider:0': augmentation_mat_guider,
                 'augmentation_output_shape:0': interpolated_lr_son.shape[:2]
             }
-            fetch_args = [self.train_op, self.train_guider_op, self.train_tps_op, self.train_affine_op, self.train_cpab_op, self.hr_guider_augmented_t, self.hr_guider_deformed_t, self.loss_t, self.net_output_t]
+            guider_ops = [self.train_guider_op, self.train_tps_op, self.train_cpab_op, self.train_affine_op]
+            fetch_args = [self.train_op, self.hr_guider_augmented_t, self.hr_guider_deformed_t, self.loss_t, self.net_output_t]
+            if should_train_guider:
+                fetch_args = guider_ops + fetch_args
+
             *_, self.hr_guider_augmented, self.hr_guider_deformed, self.loss[self.iter], train_output = \
                 self.sess.run(
                     fetch_args, feed_dict
@@ -564,6 +568,8 @@ class ZSSR:
             # Use augmentation from original input image to create current father.
             # If other scale factors were applied before, their result is also used (hr_fathers_in)
 
+            should_train_guider = self.iter % 2 == 0
+
             chosen_image, chosen_augmentation, chosen_augmentation_guider = random_augment(
                 ims=self.hr_fathers_sources,
                 guiding_im_shape=self.gi.shape if self.gi is not None else None,
@@ -575,7 +581,8 @@ class ZSSR:
                 allow_rotation=self.conf.augment_allow_rotation,
                 scale_diff_sigma=self.conf.augment_scale_diff_sigma,
                 shear_sigma=self.conf.augment_shear_sigma,
-                crop_size=self.conf.crop_size)
+                crop_size=self.conf.crop_size,
+                should_train_guider=should_train_guider)
 
             self.hr_father = tf.contrib.image.transform(
                 chosen_image, chosen_augmentation, interpolation='BILINEAR', output_shape=(self.conf.crop_size, self.conf.crop_size)
@@ -588,7 +595,7 @@ class ZSSR:
             self.hr_guider = self.gi
 
             # run network forward and back propagation, one iteration (This is the heart of the training)
-            self.train_output = self.forward_backward_pass(self.lr_son, self.hr_father, self.hr_guider, chosen_augmentation_guider)
+            self.train_output = self.forward_backward_pass(self.lr_son, self.hr_father, self.hr_guider, chosen_augmentation_guider, should_train_guider=should_train_guider)
 
             # Display info and save weights
             if not self.iter % self.conf.display_every:
