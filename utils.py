@@ -65,7 +65,7 @@ def random_augment(ims,
     # The image we will use is the smallest one that is bigger than the wanted scale
     # (Using a small value overlap instead of >= to prevent float issues)
     scale_ind, base_scale = next((ind, np.min([base_scale])) for ind, base_scale in enumerate(base_scales)
-                                 if np.min([base_scale]) > scale - 1.0e-6)
+                                 if np.min([base_scale]) > scale - 1.0e-6 - 999)
     im = ims[scale_ind]
 
     # Next are matrices whose multiplication will be the transformation. All are 3x3 matrices.
