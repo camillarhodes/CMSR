@@ -439,7 +439,7 @@ class ZSSR:
                 'hr_guider:0': np.expand_dims(hr_guider, 0),
                 'hr_guider_with_shape:0': np.expand_dims(self.gi, 0),
                 'augmentation_mat_guider:0': augmentation_mat_guider,
-                'augmentation_output_shape:0': tuple(self.sf * interpolated_lr_son.shape[:2]),
+                'augmentation_output_shape:0': tuple(np.array(self.conf.scale_factors[-1]) * interpolated_lr_son.shape[:2]),
                 'augmentation_output_shape_downscaled:0': interpolated_lr_son.shape[:2]
             }
             fetch_args = [self.train_op, self.train_guider_op, self.train_tps_op, self.train_affine_op, self.train_cpab_op, self.hr_guider_augmented_t, self.hr_guider_deformed_t, self.loss_t, self.net_output_t]
@@ -605,15 +605,6 @@ class ZSSR:
             self.hr_father = tf.contrib.image.transform(
                 chosen_image, chosen_augmentation, interpolation='BILINEAR', output_shape=(self.conf.crop_size, self.conf.crop_size)
             ).eval(session=tf.Session())
-
-            # self.hr_guider = tf.contrib.image.transform(
-            #     self.gi, chosen_augmentation_guider, interpolation='BILINEAR', output_shape=(self.conf.crop_size * int(self.sf[0]), self.conf.crop_size * int(self.sf[0]))
-            # ).eval(session=tf.Session())
-
-            # plt.imshow(self.test)
-            # # plt.imshow(self.hr_father[:,:,0])
-            # plt.imshow(imresize(imresize(self.hr_father[:,:,0],0.25),4))
-            # plt.imshow(imresize(imresize(self.hr_father[:,:,0],4),0.25))
 
             # Get lr-son from hr-father
             self.lr_son = self.father_to_son(self.hr_father)
