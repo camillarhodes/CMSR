@@ -598,9 +598,8 @@ class ZSSR:
                 scale_diff_sigma=self.conf.augment_scale_diff_sigma,
                 shear_sigma=self.conf.augment_shear_sigma,
                 crop_size=self.conf.crop_size,
-                crop_size_guider=self.conf.crop_size * int(self.sf[0]) # maybe use avg when [0] != [1]
+                crop_size_guider=self.conf.crop_size * int(self.conf.scale_factors[-1][0]) # maybe use avg when [0] != [1]
             )
-
 
             self.hr_father = tf.contrib.image.transform(
                 chosen_image, chosen_augmentation, interpolation='BILINEAR', output_shape=(self.conf.crop_size, self.conf.crop_size)
