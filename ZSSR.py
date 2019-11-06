@@ -489,7 +489,7 @@ class ZSSR:
                          'augmentation_output_shape:0': self.gi.shape[:2],
                          'augmentation_output_shape_downscaled:0': interpolated_lr_son.shape[:2],
                          'should_deform_and_augment_guider:0': should_deform_and_augment_guider,
-                         'should_downscale_guider:0': interpolated_lr_son.shape == self.final_output_shape,
+                         'should_downscale_guider:0': interpolated_lr_son.shape != self.final_output_shape,
                          }
         else:
             feed_dict = {
