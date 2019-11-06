@@ -362,7 +362,7 @@ class ZSSR:
 
             # Downscale guider
             def get_downscaled_guider():
-                return tf.image.resize_bicubic(self.layers_t_guider[-1], self.augmentation_output_shape_downscaled)
+                return tf.image.resize_bicubic(self.layers_t_guider[-1], self.augmentation_output_shape_downscaled, align_corners=True)
 
             def get_original_guider():
                 return self.layers_t_guider[-1]
@@ -529,7 +529,6 @@ class ZSSR:
         # There are four evaluations needed to be calculated:
 
         # Run net on the input to get the output super-resolution (almost final result, only post-processing needed)
-        import ipdb; ipdb.set_trace()
         self.sr = self.forward_pass(self.input, self.gi, self.output_shape if self.gi is not None else None, should_downscale_guider=False)
         # self.sr = self.forward_pass(self.input, self.gi, self.gi_per_sf.shape if self.gi is not None else None)
 
