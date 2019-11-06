@@ -107,10 +107,10 @@ class ZSSR:
         self.input, self.gt, self.gi = normalize_images(self.input, self.gt, self.gi)
 
         # Handle shape adjustments for indivisible shapes
-        final_output_shape=np.array(self.input.shape[:2])*self.conf.scale_factors[-1]
+        self.final_output_shape=np.array(self.input.shape[:2])*self.conf.scale_factors[-1]
 
-        gi_shape_equals_output_shape = self.gi is None or all(np.array(self.gi.shape[:2])==final_output_shape)
-        gt_shape_equals_output_shape = self.gt is None or all(np.array(self.gt.shape[:2])==final_output_shape)
+        gi_shape_equals_output_shape = self.gi is None or all(np.array(self.gi.shape[:2])==self.final_output_shape)
+        gt_shape_equals_output_shape = self.gt is None or all(np.array(self.gt.shape[:2])==self.final_output_shape)
 
         if not gi_shape_equals_output_shape or not gt_shape_equals_output_shape:
             sys.exit("Fix your shapes")
@@ -461,7 +461,7 @@ class ZSSR:
 
         return np.clip(np.squeeze(train_output), 0, 1)
 
-    def forward_pass(self, lr_son, hr_guider, hr_father_shape=None, augmentation_mat_guider=None, should_deform_and_augment_guider=True, should_downscale_guider=True):
+    def forward_pass(self, lr_son, hr_guider, hr_father_shape=None, augmentation_mat_guider=None, should_deform_and_augment_guider=True):
         # First gate for the lr-son into the network is interpolation to the size of the father
         interpolated_lr_son = imresize(lr_son, self.sf, hr_father_shape, self.conf.upscale_method)
 
@@ -489,7 +489,7 @@ class ZSSR:
                          'augmentation_output_shape:0': self.gi.shape[:2],
                          'augmentation_output_shape_downscaled:0': interpolated_lr_son.shape[:2],
                          'should_deform_and_augment_guider:0': should_deform_and_augment_guider,
-                         'should_downscale_guider:0': should_downscale_guider,
+                         'should_downscale_guider:0': interpolated_lr_son.shape == self.final_output_shape,
                          }
         else:
             feed_dict = {
@@ -529,7 +529,7 @@ class ZSSR:
         # There are four evaluations needed to be calculated:
 
         # Run net on the input to get the output super-resolution (almost final result, only post-processing needed)
-        self.sr = self.forward_pass(self.input, self.gi, self.output_shape if self.gi is not None else None, should_downscale_guider=False)
+        self.sr = self.forward_pass(self.input, self.gi, self.output_shape if self.gi is not None else None)
         # self.sr = self.forward_pass(self.input, self.gi, self.gi_per_sf.shape if self.gi is not None else None)
 
         # 1. True MSE (only if ground-truth was given), note: this error is before post-processing.
@@ -711,7 +711,6 @@ class ZSSR:
                 test_input, augmented_gi if self.gi is not None else None,
                 hr_father_shape=augmented_gi.shape if self.gi is not None else None,
                 should_deform_and_augment_guider=False, # as we just augmented the guider here,
-                should_downscale_guider=False
             )
 
             # Undo the rotation for the processed output (mind the opposite order of the flip and the rotation)
