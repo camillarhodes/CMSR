@@ -107,10 +107,10 @@ class ZSSR:
         self.input, self.gt, self.gi = normalize_images(self.input, self.gt, self.gi)
 
         # Handle shape adjustments for indivisible shapes
-        self.final_output_shape=np.array(self.input.shape[:2])*self.conf.scale_factors[-1]
+        final_output_shape=np.array(self.input.shape[:2])*self.conf.scale_factors[-1]
 
-        gi_shape_equals_output_shape = self.gi is None or all(np.array(self.gi.shape[:2])==self.final_output_shape)
-        gt_shape_equals_output_shape = self.gt is None or all(np.array(self.gt.shape[:2])==self.final_output_shape)
+        gi_shape_equals_output_shape = self.gi is None or all(np.array(self.gi.shape[:2])==final_output_shape)
+        gt_shape_equals_output_shape = self.gt is None or all(np.array(self.gt.shape[:2])==final_output_shape)
 
         if not gi_shape_equals_output_shape or not gt_shape_equals_output_shape:
             sys.exit("Fix your shapes")
@@ -220,8 +220,6 @@ class ZSSR:
                 # outside of the network so it's unneeded here
                 should_deform_and_augment_guider = tf.placeholder_with_default(True, shape=(), name='should_deform_and_augment_guider')
 
-                should_downscale_guider = tf.placeholder_with_default(True, shape=(), name='should_downscale_guider')
-
                 # Guider image
                 self.hr_guider_t = tf.placeholder(tf.float32, name='hr_guider')
 
@@ -272,7 +270,6 @@ class ZSSR:
 
                 # Transformation output shape
                 self.augmentation_output_shape = tf.placeholder(tf.int32, name='augmentation_output_shape')
-                self.augmentation_output_shape_downscaled = tf.placeholder(tf.int32, name='augmentation_output_shape_downscaled')
 
                 # Projective transformation - 8 degrees of freedom
                 self.augmentation_mat_guider.set_shape([8])
@@ -309,7 +306,6 @@ class ZSSR:
                     return tf.contrib.image.transform(
                         self.hr_guider_deformed_t, self.augmentation_mat_guider, interpolation='BILINEAR', output_shape=self.augmentation_output_shape
                     )
-
 
                 self.hr_guider_augmented_t = tf.cond(should_deform_and_augment_guider, get_augmented_guider, get_original_guider)
 
@@ -360,19 +356,8 @@ class ZSSR:
             # Output image including guider
             self.net_output_t = self.net_output_before_guider_t
 
-            # Downscale guider
-            def get_downscaled_guider():
-                return tf.image.resize_bicubic(self.layers_t_guider[-1], self.augmentation_output_shape_downscaled, align_corners=True)
-
-            def get_original_guider():
-                return self.layers_t_guider[-1]
-
-            self.downscaled_guider = tf.cond(should_downscale_guider, get_downscaled_guider, get_original_guider)
-
-
             if self.gi is not None:
-                # self.net_output_t += self.layers_t_guider[-1]
-                self.net_output_t += self.downscaled_guider
+                self.net_output_t += self.layers_t_guider[-1]
 
             # Very final loss
             self.loss_t = tf.reduce_mean(tf.reshape(tf.abs(self.net_output_t - self.hr_father_t), [-1]))
@@ -439,8 +424,7 @@ class ZSSR:
                 'hr_guider:0': np.expand_dims(hr_guider, 0),
                 'hr_guider_with_shape:0': np.expand_dims(self.gi, 0),
                 'augmentation_mat_guider:0': augmentation_mat_guider,
-                'augmentation_output_shape:0': tuple(np.array(self.conf.scale_factors[-1]) * interpolated_lr_son.shape[:2]),
-                'augmentation_output_shape_downscaled:0': interpolated_lr_son.shape[:2]
+                'augmentation_output_shape:0': interpolated_lr_son.shape[:2]
             }
             fetch_args = [self.train_op, self.train_guider_op, self.train_tps_op, self.train_affine_op, self.train_cpab_op, self.hr_guider_augmented_t, self.hr_guider_deformed_t, self.loss_t, self.net_output_t]
             *_, self.hr_guider_augmented, self.hr_guider_deformed, self.loss[self.iter], train_output = \
@@ -473,9 +457,6 @@ class ZSSR:
             # could be 1 ratio (like when running on full size input with full size guider)
             guider_to_im_ratio = np.true_divide(hr_guider.shape[:2], hr_father_shape[:2])
 
-            # patch
-            guider_to_im_ratio = np.array([1,1])
-
             # if no augmentation sent, only perform downscaling
             augmentation_mat_guider = augmentation_mat_guider or np.array([guider_to_im_ratio[0], 0, 0, 0, guider_to_im_ratio[1], 0, 0, 0])
 
@@ -486,10 +467,8 @@ class ZSSR:
                          'hr_guider:0': np.expand_dims(hr_guider, 0) if hr_guider is not None else None,
                          'hr_guider_with_shape:0': np.expand_dims(self.gi, 0) if hr_guider is not None else None,
                          'augmentation_mat_guider:0': augmentation_mat_guider,
-                         'augmentation_output_shape:0': self.gi.shape[:2],
-                         'augmentation_output_shape_downscaled:0': interpolated_lr_son.shape[:2],
+                         'augmentation_output_shape:0': interpolated_lr_son.shape[:2],
                          'should_deform_and_augment_guider:0': should_deform_and_augment_guider,
-                         'should_downscale_guider:0': interpolated_lr_son.shape != self.final_output_shape,
                          }
         else:
             feed_dict = {
@@ -585,7 +564,6 @@ class ZSSR:
             # Use augmentation from original input image to create current father.
             # If other scale factors were applied before, their result is also used (hr_fathers_in)
 
-            # make sure crop_s_g works
             chosen_image, chosen_augmentation, chosen_augmentation_guider = random_augment(
                 ims=self.hr_fathers_sources,
                 guiding_im_shape=self.gi.shape if self.gi is not None else None,
@@ -597,9 +575,7 @@ class ZSSR:
                 allow_rotation=self.conf.augment_allow_rotation,
                 scale_diff_sigma=self.conf.augment_scale_diff_sigma,
                 shear_sigma=self.conf.augment_shear_sigma,
-                crop_size=self.conf.crop_size,
-                crop_size_guider=self.conf.crop_size * int(self.conf.scale_factors[-1][0]) # maybe use avg when [0] != [1]
-            )
+                crop_size=self.conf.crop_size)
 
             self.hr_father = tf.contrib.image.transform(
                 chosen_image, chosen_augmentation, interpolation='BILINEAR', output_shape=(self.conf.crop_size, self.conf.crop_size)
@@ -700,7 +676,7 @@ class ZSSR:
             tmp_output = self.forward_pass(
                 test_input, augmented_gi if self.gi is not None else None,
                 hr_father_shape=augmented_gi.shape if self.gi is not None else None,
-                should_deform_and_augment_guider=False, # as we just augmented the guider here,
+                should_deform_and_augment_guider=False # as we just augmented the guider here
             )
 
             # Undo the rotation for the processed output (mind the opposite order of the flip and the rotation)
