@@ -96,6 +96,8 @@ class ZSSR:
         # Read input image (can be either a numpy array or a path to an image file)
         self.input = input_img if type(input_img) is not str else cv2.imread(input_img, -1)
 
+        self.input_type = self.input.dtype
+
         # For evaluation purposes, ground-truth image can be supplied.
         self.gt = ground_truth if type(ground_truth) is not str else cv2.imread(ground_truth, -1)
 
@@ -196,6 +198,8 @@ class ZSSR:
                 post_processed_output, = remove_n_channels_dim(post_processed_output)
 
                 post_processed_output, = denormalize_imgs(post_processed_output, vmin=self.conf.input_vmin, vmax=self.conf.input_vmax)
+
+                post_processed_output = post_processed_output.astype(self.input_type)
 
 
                 # plt.imsave('%s/%s_zssr_%s.%s' %
