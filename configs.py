@@ -74,9 +74,19 @@ class Config:
         self.filter_shape = ([[3, 3, input_filter_depth, self.width]] +
                              [[3, 3, self.width, self.width]] * (self.depth-2) +
                              [[3, 3, self.width, output_filter_depth]])
-        self.filter_shape_guider = ([[3, 3, guider_filter_depth, width_guider]] +
-                             [[3, 3, width_guider, width_guider]] * (self.depth_guider-2) +
-                             [[1, 1, width_guider, guider_output_filter_depth]])
+        #self.filter_shape_guider = ([[3, 3, guider_filter_depth, width_guider]] +
+        #                     [[3, 3, width_guider, width_guider]] * (self.depth_guider-2) +
+        #                     [[1, 1, width_guider, guider_output_filter_depth]])
+
+        self.filter_shape_guider = ([[3, 3, guider_filter_depth, width_guider/4]] +
+                                    [[3, 3, width_guider/4, width_guider/2]]  +
+                                    [[3, 3, width_guider/2, width_guider]]  +
+                                    [[3, 3, width_guider, width_guider]]  +
+                                    [[3, 3, width_guider, width_guider]]  +
+                                    [[1, 1, width_guider, width_guider/2]]  +
+                                    [[1, 1, width_guider/2, width_guider/4]]  +
+                                    [[1, 1, width_guider/4, guider_output_filter_depth]])
+
 
 
 ########################################
@@ -90,7 +100,7 @@ X2_ONE_JUMP_IDEAL_CONF.input_path = os.path.dirname(__file__) + '/set14'
 
 # [GUY]
 THERMAL_IMAGES_CONF = Config(input_filter_depth=1, guider_filter_depth=3, output_filter_depth=1, guider_output_filter_depth=1,
-                             depth_guider=4)
+                             depth_guider=8)
 THERMAL_IMAGES_CONF.plot_losses = True
 THERMAL_IMAGES_CONF.crop_size = 48
 THERMAL_IMAGES_CONF.max_iters = 800
