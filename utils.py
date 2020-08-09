@@ -142,7 +142,7 @@ def random_augment(ims,
                      .dot(shift_to_center_mat))
 
     if guiding_im_shape:
-        guider_to_im_ratio = np.true_divide(guiding_im_shape, im.shape)[:2]
+        guider_to_im_ratio = np.true_divide(guiding_im_shape[:2], im.shape[:2])
 
         # first scale the guider/grid to the size of the image
         scale_guider_mat = np.array([[1.0 / guider_to_im_ratio[0], 0, 0],
@@ -249,7 +249,29 @@ def remove_n_channels_dim(*images):
     return tuple(map(_remover, images))
 
 
-def normalize_images(*images):
+def denormalize_imgs(*images, vmin, vmax):
+    def _denormalize(img):
+        if img is not None:
+            img *= (vmax - vmin)
+            img += vmin
+            return img
+        return None
+
+    return tuple(map(_denormalize, images))
+
+
+def normalize_imgs(*images, vmin, vmax):
+    def _normalize(img):
+        if img is not None:
+            img -= vmin
+            img /= vmax
+            return img
+        return None
+
+    return tuple(map(_normalize, images))
+
+
+def adjust_img_types(*images):
     def _normalize(img):
         if img is not None:
             img = img.astype(np.float64)[:,:,:3]

@@ -94,17 +94,20 @@ class ZSSR:
         self.conf = conf
 
         # Read input image (can be either a numpy array or a path to an image file)
-        self.input = input_img if type(input_img) is not str else img.imread(input_img)
+        self.input = input_img if type(input_img) is not str else cv2.imread(input_img, -1)
 
         # For evaluation purposes, ground-truth image can be supplied.
-        self.gt = ground_truth if type(ground_truth) is not str else img.imread(ground_truth)
+        self.gt = ground_truth if type(ground_truth) is not str else cv2.imread(ground_truth, -1)
 
         # To improve learning, guiding image can be supplied
-        self.gi = guiding_img if type(guiding_img) is not str else img.imread(guiding_img)
+        self.gi = guiding_img if type(guiding_img) is not str else cv2.imread(guiding_img, -1)
         # self.gi=None
 
+        # Adjust image types
+        self.input, self.gt, self.gi = adjust_img_types(self.input, self.gt, self.gi)
+
         # Normalize images
-        self.input, self.gt, self.gi = normalize_images(self.input, self.gt, self.gi)
+        self.input, self.gt = normalize_imgs(self.input, self.gt, vmin=self.conf.input_vmin, vmax=self.conf.input_vmax)
 
         # Handle shape adjustments for indivisible shapes
         final_output_shape=np.array(self.input.shape[:2])*self.conf.scale_factors[-1]
@@ -157,7 +160,7 @@ class ZSSR:
             # This only happens if there exists ground-truth and sf is not the last one (or too close to it).
             # We use imresize with both scale and output-size, see comment in forward_backward_pass.
             # noinspection PyTypeChecker
-            self.gt_per_sf, = normalize_images(np.clip(
+            self.gt_per_sf, = adjust_img_types(np.clip(
                 imresize(self.gt,
                          scale_factor=self.sf / self.conf.scale_factors[-1] if self.output_shape is None else None,
                          output_shape=self.output_shape,
@@ -192,13 +195,15 @@ class ZSSR:
 
                 post_processed_output, = remove_n_channels_dim(post_processed_output)
 
+                post_processed_output, = denormalize_imgs(post_processed_output, vmin=self.conf.input_vmin, vmax=self.conf.input_vmax)
+
 
                 # plt.imsave('%s/%s_zssr_%s.%s' %
                 #            (self.conf.result_path, os.path.basename(self.file_name)[:-4], sf_str, self.conf.img_ext),
                 #            post_processed_output, vmin=0, vmax=1, cmap=self.conf.cmap)
                 cv2.imwrite('%s/%s_zssr_%s.%s' %
                            (self.conf.result_path, os.path.basename(self.file_name)[:-4], sf_str, self.conf.img_ext),
-                           post_processed_output * 255)
+                           post_processed_output)
 
             # verbose
             print('** Done training for sf=', sf, ' **')
