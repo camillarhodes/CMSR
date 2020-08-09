@@ -264,7 +264,7 @@ def normalize_imgs(*images, vmin, vmax):
     def _normalize(img):
         if img is not None:
             img -= vmin
-            img /= vmax
+            img /= (vmax - min)
             return img
         return None
 
