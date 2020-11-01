@@ -21,7 +21,7 @@ def main(conf_name, gpu):
     # We take all png files that are not ground truth
     files = [file_path for file_path in glob.glob('%s/*.*' % conf.input_path)
              if file_path[-len(conf.img_ext) - 4 :-len(conf.img_ext) - 1] \
-             not in ['_gt','_gi'] and file_path.split('.')[-1] == conf.img_ext]
+             not in ['_gt','_gi', 'gi2'] and file_path.split('.')[-1] == conf.img_ext]
 
     # Loop over all the files
     for file_ind, input_file in enumerate(files):
@@ -33,8 +33,11 @@ def main(conf_name, gpu):
 
         # Guiding files needs to be like the input file with _gi (if exists)
         guiding_file = input_file[:-len(conf.img_ext) - 1] + '_gi.' + conf.guiding_img_ext
+        guiding_file2 = input_file[:-len(conf.img_ext) - 1] + '_gi2.' + conf.guiding_img_ext
         if not os.path.isfile(guiding_file):
             guiding_file = '0'
+        if not os.path.isfile(guiding_file2):
+            guiding_file2 = '0'
 
         # Numeric kernel files need to be like the input file with serial number
         kernel_files = ['%s_%d.mat;' % (input_file[:-4], ind) for ind in range(len(conf.scale_factors))]
@@ -61,7 +64,7 @@ def main(conf_name, gpu):
             # Run ZSSR from command line, open xterm for each run
             os.system("xterm -hold -e " + conf.python_path +
                       " %s/run_ZSSR_single_input.py '%s' '%s' '%s' '%s' '%s' '%s' alias python &"
-                      % (local_dir, input_file, ground_truth_file, guiding_file, kernel_files_str, cur_gpu, conf_name, res_dir))
+                      % (local_dir, input_file, ground_truth_file, guiding_file, guiding_file2, kernel_files_str, cur_gpu, conf_name, res_dir))
 
             # Verbose
             print('Ran file #%d: %s on GPU %d\n' % (file_ind, input_file, cur_gpu))
@@ -72,7 +75,7 @@ def main(conf_name, gpu):
 
         # The other option is just to run sequentially on a chosen GPU.
         else:
-            run_ZSSR_single_input.main(input_file, ground_truth_file, guiding_file, kernel_files_str, gpu, conf_name, res_dir)
+            run_ZSSR_single_input.main(input_file, ground_truth_file, guiding_file, guiding_file2, kernel_files_str, gpu, conf_name, res_dir)
 
 
 if __name__ == '__main__':

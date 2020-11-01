@@ -89,7 +89,7 @@ class ZSSR:
     # Tensorflow graph default
     sess = None
 
-    def __init__(self, input_img, conf=Config(), ground_truth=None, guiding_img=None, kernels=None):
+    def __init__(self, input_img, conf=Config(), ground_truth=None, guiding_img=None, guiding_img2=None, kernels=None):
         # Acquire meta parameters configuration from configuration class as a class variable
         self.conf = conf
 
@@ -103,10 +103,12 @@ class ZSSR:
 
         # To improve learning, guiding image can be supplied
         self.gi = guiding_img if type(guiding_img) is not str else cv2.imread(guiding_img, -1)
+        self.gi2 = guiding_img2 if type(guiding_img2) is not str else cv2.imread(guiding_img2, -1)
+        # self.gi=None
         # self.gi=None
 
         # Adjust image types
-        self.input, self.gt, self.gi = adjust_img_types(self.input, self.gt, self.gi)
+        self.input, self.gt, self.gi, self.gi2 = adjust_img_types(self.input, self.gt, self.gi, self.gi2)
 
         # Normalize images
         self.input, self.gt = normalize_imgs(self.input, self.gt, vmin=self.conf.input_vmin, vmax=self.conf.input_vmax)
@@ -231,6 +233,9 @@ class ZSSR:
 
                 # Guider image
                 self.hr_guider_t = tf.placeholder(tf.float32, name='hr_guider')
+                
+                # Guider image 2
+                self.hr_guider_2_t = tf.placeholder(tf.float32, name='hr_guider_2')
 
                 # Guider image with shape, needed for TPS / affine
                 # transformations
@@ -238,7 +243,11 @@ class ZSSR:
                     np.expand_dims(add_n_channels_dim(self.gi)[0], 0).shape,
                     name='hr_guider_with_shape',
                 )
-
+                
+                self.hr_guider_with_shape_2_t = tf.placeholder(tf.float32,
+                    np.expand_dims(add_n_channels_dim(self.gi2)[0], 0).shape,
+                    name='hr_guider_with_shape_2',
+                )
 
             # Input image
             self.lr_son_t = tf.placeholder(tf.float32, name='lr_son')
@@ -246,26 +255,39 @@ class ZSSR:
             # Ground truth (supervision)
             self.hr_father_t = tf.placeholder(tf.float32, name='hr_father')
 
-            if self.gi is not None:
+            if self.gi is not None and self.gi2 is not None:
 
                 dim_tps = get_transformer_dim('TPS')
                 dim_affine = get_transformer_dim('affine')
                 dim_cpab = get_transformer_dim('CPAB')
 
-                setup_CPAB_transformer(ncx=self.conf.cpab_tessalation_ncx, ncy=self.conf.cpab_tessalation_ncy, override = True)
+                setup_CPAB_transformer(ncx=self.conf.cpab_tessalation_ncx, ncy=self.conf.cpab_tessalation_ncy, override = True, name='guider1cpab')
+
+                setup_CPAB_transformer(ncx=self.conf.cpab_tessalation_ncx, ncy=self.conf.cpab_tessalation_ncy, override = True, name='guider2cpab')
 
                 # Prepare transformation layers
                 tps_layer = get_transformer_layer('TPS')
                 affine_layer = get_transformer_layer('affine')
                 cpab_layer = get_transformer_layer('CPAB')
 
+                # Prepare transformation layers
+                tps_layer2 = get_transformer_layer('TPS')
+                affine_layer2 = get_transformer_layer('affine')
+                cpab_layer2 = get_transformer_layer('CPAB')
+
                 _1, bias_tps = get_transformer_init_weights(dim_tps, 'TPS')
                 _1, bias_affine = get_transformer_init_weights(dim_affine, 'affine')
                 _1, bias_cpab = get_transformer_init_weights(dim_cpab, 'CPAB')
 
+
                 self.theta_tps_t = tf.Variable(initial_value=bias_tps, dtype=tf.float32)
                 self.theta_affine_t = tf.Variable(initial_value=bias_affine, dtype=tf.float32)
                 self.theta_cpab_t = tf.Variable(initial_value=tf.expand_dims(bias_cpab, 0) + 0.001, dtype=tf.float32)
+
+                self.theta_tps_t2 = tf.Variable(initial_value=bias_tps, dtype=tf.float32)
+
+                self.theta_affine_t2 = tf.Variable(initial_value=bias_affine, dtype=tf.float32)
+                self.theta_cpab_t2 = tf.Variable(initial_value=tf.expand_dims(bias_cpab, 0) + 0.001, dtype=tf.float32)
 
                 # Create grid sampler for guiding image
                 # B, H, W, C = (1, self.gi.shape[0], self.gi.shape[1], 3)
@@ -291,9 +313,13 @@ class ZSSR:
 
                 def get_original_guider():
                     return self.hr_guider_t
+                
+                def get_original_guider2():
+                    return self.hr_guider_t
 
                 # self.hr_guider_features_t = tf.cond(should_deform_and_augment_guider, get_features_guider, get_original_guider)
 
+    
                 def get_deformed_guider():
                     # the shape was lost (changed to unknown), recover it
                     # self.hr_guider_features_t.set_shape(self.hr_guider_with_shape_t.get_shape())
@@ -307,7 +333,21 @@ class ZSSR:
                         ), self.theta_tps_t, self.gi.shape[:2]
                     )
 
+                def get_deformed_guider2():
+                    # the shape was lost (changed to unknown), recover it
+                    # self.hr_guider_features_t.set_shape(self.hr_guider_with_shape_t.get_shape())
+
+                    # TPS / affine transform
+                    return tps_layer2(
+                        cpab_layer2(
+                            affine_layer2(
+                                self.hr_guider_with_shape_2_t, self.theta_affine_t2, self.gi2.shape[:2]
+                            ), self.theta_cpab_t2, self.gi2.shape[:2]
+                        ), self.theta_tps_t2, self.gi2.shape[:2]
+                    )
+
                 self.hr_guider_deformed_t = tf.cond(should_deform_and_augment_guider, get_deformed_guider, get_original_guider)
+                self.hr_guider_deformed_2_t = tf.cond(should_deform_and_augment_guider, get_deformed_guider2, get_original_guider2)
 
                 def get_augmented_guider():
                     # the shape was lost (changed to unknown), recover it
@@ -316,7 +356,16 @@ class ZSSR:
                         self.hr_guider_deformed_t, self.augmentation_mat_guider, interpolation='BILINEAR', output_shape=self.augmentation_output_shape
                     )
 
+                def get_augmented_guider2():
+                    # the shape was lost (changed to unknown), recover it
+                    self.hr_guider_deformed_2_t.set_shape(self.hr_guider_with_shape_2_t.get_shape())
+                    return tf.contrib.image.transform(
+                        self.hr_guider_deformed_2_t, self.augmentation_mat_guider, interpolation='BILINEAR', output_shape=self.augmentation_output_shape
+                    )
+
                 self.hr_guider_augmented_t = tf.cond(should_deform_and_augment_guider, get_augmented_guider, get_original_guider)
+
+                self.hr_guider_augmented_2_t = tf.cond(should_deform_and_augment_guider, get_augmented_guider2, get_original_guider2)
 
                 self.filters_t_guider = [tf.get_variable(shape=meta.filter_shape_guider[ind], name='filter_guider_%d' % ind,
                                                initializer=tf.random_normal_initializer(
@@ -324,15 +373,28 @@ class ZSSR:
                                                        meta.filter_shape_guider[ind][0:3]))))
                                for ind in range(meta.depth_guider)]
 
+                self.filters_t_guider2 = [tf.get_variable(shape=meta.filter_shape_guider[ind], name='filter_guider2_%d' % ind,
+                                               initializer=tf.random_normal_initializer(
+                                                   stddev=np.sqrt(meta.init_variance/np.prod(
+                                                       meta.filter_shape_guider[ind][0:3]))))
+                               for ind in range(meta.depth_guider)]
+
+
+
                 # Define guider layers
                 self.layers_t_guider = [self.hr_guider_augmented_t] + [None] * meta.depth_guider
+                self.layers_t_guider2 = [self.hr_guider_augmented_2_t] + [None] * meta.depth_guider
 
                 for l in range(meta.depth_guider - 1):
                     self.layers_t_guider[l + 1] = tf.nn.relu(tf.nn.conv2d(self.layers_t_guider[l], self.filters_t_guider[l],
                                                                 [1, 1, 1, 1], "SAME", name='layer_guider_%d' % (l + 1)))
+                    self.layers_t_guider2[l + 1] = tf.nn.relu(tf.nn.conv2d(self.layers_t_guider2[l], self.filters_t_guider2[l],
+                                                                [1, 1, 1, 1], "SAME", name='layers_t_guider2_%d' % (l + 1)))
                 l = meta.depth_guider - 1
                 self.layers_t_guider[l+1] = tf.nn.conv2d(self.layers_t_guider[l], self.filters_t_guider[l],
                                              [1, 1, 1, 1], "SAME", name='layer_guider_%d' % (l + 1))
+                self.layers_t_guider2[l+1] = tf.nn.conv2d(self.layers_t_guider2[l], self.filters_t_guider2[l],
+                                             [1, 1, 1, 1], "SAME", name='layer_guider2_%d' % (l + 1))
 
 
 
@@ -366,7 +428,7 @@ class ZSSR:
             self.net_output_t = self.net_output_before_guider_t
 
             if self.gi is not None:
-                self.net_output_t += self.layers_t_guider[-1]
+                self.net_output_t += self.layers_t_guider[-1] + self.layers_t_guider2[-1]
 
             # Very final loss
             self.loss_t = tf.reduce_mean(tf.reshape(tf.abs(self.net_output_t - self.hr_father_t), [-1]))
@@ -382,12 +444,12 @@ class ZSSR:
 
             if self.gi is not None:
                 # train guider layers and ae layers
-                self.train_guider_op = guider_optimizer.minimize(self.loss_t, var_list=self.filters_t_guider)
+                self.train_guider_op = guider_optimizer.minimize(self.loss_t, var_list=self.filters_t_guider+self.filters_t_guider2)
                 # self.train_ae_op = guider_optimizer.minimize(self.loss_ae, var_list=unet_vars)
 
-                self.train_tps_op = tps_optimizer.minimize(self.loss_t, var_list=[self.theta_tps_t])
-                self.train_affine_op = affine_optimizer.minimize(self.loss_t, var_list=[self.theta_affine_t])
-                self.train_cpab_op = cpab_optimizer.minimize(self.loss_t, var_list=[self.theta_cpab_t])
+                self.train_tps_op = tps_optimizer.minimize(self.loss_t, var_list=[self.theta_tps_t, self.theta_tps_t2])
+                self.train_affine_op = affine_optimizer.minimize(self.loss_t, var_list=[self.theta_affine_t, self.theta_affine_t2])
+                self.train_cpab_op = cpab_optimizer.minimize(self.loss_t, var_list=[self.theta_cpab_t, self.theta_cpab_t2])
 
             self.init_op = tf.initialize_all_variables()
 
@@ -432,11 +494,12 @@ class ZSSR:
                 'hr_father:0': np.expand_dims(hr_father, 0),
                 'hr_guider:0': np.expand_dims(hr_guider, 0),
                 'hr_guider_with_shape:0': np.expand_dims(self.gi, 0),
+                'hr_guider_with_shape_2:0': np.expand_dims(self.gi2, 0),
                 'augmentation_mat_guider:0': augmentation_mat_guider,
                 'augmentation_output_shape:0': interpolated_lr_son.shape[:2]
             }
-            fetch_args = [self.train_op, self.train_guider_op, self.train_tps_op, self.train_affine_op, self.train_cpab_op, self.hr_guider_augmented_t, self.hr_guider_deformed_t, self.loss_t, self.net_output_t]
-            *_, self.hr_guider_augmented, self.hr_guider_deformed, self.loss[self.iter], train_output = \
+            fetch_args = [self.train_op, self.train_guider_op, self.train_tps_op, self.train_affine_op, self.train_cpab_op, self.hr_guider_augmented_t, self.hr_guider_deformed_t, self.hr_guider_deformed_2_t, self.loss_t, self.net_output_t]
+            *_, self.hr_guider_augmented, self.hr_guider_deformed, self.hr_guider_deformed_2 ,self.loss[self.iter], train_output = \
                 self.sess.run(
                     fetch_args, feed_dict
                 )
@@ -475,6 +538,7 @@ class ZSSR:
             feed_dict = {'lr_son:0': np.expand_dims(interpolated_lr_son, 0),
                          'hr_guider:0': np.expand_dims(hr_guider, 0) if hr_guider is not None else None,
                          'hr_guider_with_shape:0': np.expand_dims(self.gi, 0) if hr_guider is not None else None,
+                         'hr_guider_with_shape_2:0': np.expand_dims(self.gi2, 0) if hr_guider is not None else None,
                          'augmentation_mat_guider:0': augmentation_mat_guider,
                          'augmentation_output_shape:0': interpolated_lr_son.shape[:2],
                          'should_deform_and_augment_guider:0': should_deform_and_augment_guider,
@@ -653,6 +717,7 @@ class ZSSR:
             [self.hr_guider_deformed_t], {
                 'hr_guider:0': np.expand_dims(self.gi, 0),
                 'hr_guider_with_shape:0': np.expand_dims(self.gi, 0),
+                'hr_guider_with_shape_2:0': np.expand_dims(self.gi2, 0),
                 'augmentation_mat_guider:0': np.array([1, 0, 0, 0, 1, 0, 0, 0]),
                 'augmentation_output_shape:0': self.gi.shape[:2]
 
